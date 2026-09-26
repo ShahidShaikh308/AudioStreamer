@@ -1,118 +1,37 @@
-"""Versioned UDP packet format for float32 PCM audio.
+"""Compatibility facade for protocol serialization and parsing.
 
-All header fields use network byte order. The payload is interleaved,
-little-endian float32 PCM, matching ``WasapiLoopbackCapture``. ``timestamp_ns``
-is the sender's monotonic clock in nanoseconds; it is useful for relative timing
-but is not directly comparable with the receiver's clock.
+New code may import models and operations from ``packet``, ``serializer``, and
+``parser`` directly. This module retains the original project's names so its
+UDP sender and receiver can continue to operate through the refactor.
 """
 
 from __future__ import annotations
 
-import struct
-from dataclasses import dataclass
+from .constants import (
+    CURRENT_VERSION,
+    MAGIC,
+    MAX_DATAGRAM_SIZE,
+    MAX_PAYLOAD_SIZE,
+    SAMPLE_WIDTH_BYTES,
+    UINT32_MASK,
+)
+from .constants import (
+    V2_BASE_HEADER as HEADER,
+)
+from .constants import (
+    V2_FIXED_HEADER_SIZE as HEADER_SIZE,
+)
+from .enums import PacketFlags, PacketType, ProtocolVersion, SampleFormat
+from .packet import AudioPacket, PacketError
+from .parser import decode_packet, parse_packet
+from .serializer import SerializationError, encode_packet, serialize_packet
 
-MAGIC = b"ASAU"
-VERSION = 1
-SAMPLE_FORMAT_FLOAT32_LE = 1
-HEADER = struct.Struct("!4sBBHIQIHH")
-HEADER_SIZE = HEADER.size
-MAX_DATAGRAM_SIZE = 1200
-MAX_PAYLOAD_SIZE = MAX_DATAGRAM_SIZE - HEADER_SIZE
-SAMPLE_WIDTH_BYTES = 4
-UINT32_MASK = 0xFFFF_FFFF
-
-
-class PacketError(ValueError):
-    """Raised when a packet is malformed or contains unsupported audio."""
-
-
-@dataclass(frozen=True)
-class AudioPacket:
-    sequence_number: int
-    timestamp_ns: int
-    sample_rate: int
-    channels: int
-    payload: bytes
-
-
-def _validate_fields(packet: AudioPacket) -> None:
-    if not 0 <= packet.sequence_number <= UINT32_MASK:
-        raise PacketError("sequence number must fit in an unsigned 32-bit integer")
-    if not 0 <= packet.timestamp_ns <= 0xFFFF_FFFF_FFFF_FFFF:
-        raise PacketError("timestamp must fit in an unsigned 64-bit integer")
-    if not 1 <= packet.sample_rate <= 0xFFFF_FFFF:
-        raise PacketError("sample rate must be a positive unsigned 32-bit integer")
-    if not 1 <= packet.channels <= 0xFFFF:
-        raise PacketError("channel count must be a positive unsigned 16-bit integer")
-    if not packet.payload:
-        raise PacketError("PCM payload must not be empty")
-    if len(packet.payload) > MAX_PAYLOAD_SIZE:
-        raise PacketError(f"payload exceeds {MAX_PAYLOAD_SIZE} bytes")
-    frame_size = packet.channels * SAMPLE_WIDTH_BYTES
-    if len(packet.payload) % frame_size:
-        raise PacketError("payload length must contain whole interleaved audio frames")
-
-
-def encode_packet(packet: AudioPacket) -> bytes:
-    """Serialize one validated audio packet to a UDP datagram."""
-    _validate_fields(packet)
-    header = HEADER.pack(
-        MAGIC,
-        VERSION,
-        SAMPLE_FORMAT_FLOAT32_LE,
-        0,
-        packet.sequence_number,
-        packet.timestamp_ns,
-        packet.sample_rate,
-        packet.channels,
-        len(packet.payload),
-    )
-    return header + packet.payload
-
-
-def decode_packet(datagram: bytes) -> AudioPacket:
-    """Validate a complete datagram and return its PCM packet."""
-    if len(datagram) < HEADER_SIZE:
-        raise PacketError("datagram is shorter than the protocol header")
-    if len(datagram) > MAX_DATAGRAM_SIZE:
-        raise PacketError("datagram exceeds the configured maximum size")
-
-    (
-        magic,
-        version,
-        sample_format,
-        flags,
-        sequence_number,
-        timestamp_ns,
-        sample_rate,
-        channels,
-        payload_length,
-    ) = HEADER.unpack_from(datagram)
-
-    if magic != MAGIC:
-        raise PacketError("invalid packet magic")
-    if version != VERSION:
-        raise PacketError(f"unsupported protocol version: {version}")
-    if sample_format != SAMPLE_FORMAT_FLOAT32_LE:
-        raise PacketError(f"unsupported sample format: {sample_format}")
-    if flags != 0:
-        raise PacketError("reserved flags must be zero")
-    if payload_length != len(datagram) - HEADER_SIZE:
-        raise PacketError("declared payload length does not match datagram size")
-
-    packet = AudioPacket(
-        sequence_number=sequence_number,
-        timestamp_ns=timestamp_ns,
-        sample_rate=sample_rate,
-        channels=channels,
-        payload=datagram[HEADER_SIZE:],
-    )
-    _validate_fields(packet)
-    return packet
+VERSION = CURRENT_VERSION
+SAMPLE_FORMAT_FLOAT32_LE = int(SampleFormat.FLOAT32_LE)
 
 
 def split_pcm_payload(payload: bytes, channels: int) -> list[bytes]:
-    """Split PCM into whole-frame payloads that fit in a conservative UDP MTU."""
+    """Split float32 PCM into frame-aligned payloads within the v2 MTU limit."""
     if channels < 1:
         raise PacketError("channel count must be positive")
     if not payload:
@@ -120,11 +39,35 @@ def split_pcm_payload(payload: bytes, channels: int) -> list[bytes]:
     frame_size = channels * SAMPLE_WIDTH_BYTES
     if len(payload) % frame_size:
         raise PacketError("PCM buffer must contain whole interleaved audio frames")
-
-    bytes_per_packet = (MAX_PAYLOAD_SIZE // frame_size) * frame_size
-    if bytes_per_packet == 0:
+    packet_payload_size = (MAX_PAYLOAD_SIZE // frame_size) * frame_size
+    if packet_payload_size == 0:
         raise PacketError("channel count leaves no room for an audio frame")
     return [
-        payload[offset : offset + bytes_per_packet]
-        for offset in range(0, len(payload), bytes_per_packet)
+        payload[offset : offset + packet_payload_size]
+        for offset in range(0, len(payload), packet_payload_size)
     ]
+
+
+__all__ = [
+    "HEADER",
+    "HEADER_SIZE",
+    "MAGIC",
+    "MAX_DATAGRAM_SIZE",
+    "MAX_PAYLOAD_SIZE",
+    "SAMPLE_FORMAT_FLOAT32_LE",
+    "SAMPLE_WIDTH_BYTES",
+    "UINT32_MASK",
+    "VERSION",
+    "AudioPacket",
+    "PacketError",
+    "PacketFlags",
+    "PacketType",
+    "ProtocolVersion",
+    "SampleFormat",
+    "SerializationError",
+    "decode_packet",
+    "encode_packet",
+    "parse_packet",
+    "serialize_packet",
+    "split_pcm_payload",
+]

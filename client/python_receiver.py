@@ -6,6 +6,7 @@ import argparse
 import socket
 import sys
 
+from server.network.enums import PacketType, SampleFormat
 from server.network.protocol import (
     MAX_DATAGRAM_SIZE,
     AudioPacket,
@@ -23,6 +24,12 @@ class FloatAudioPlayer:
         self._format: tuple[int, int] | None = None
 
     def play(self, packet: AudioPacket) -> None:
+        if packet.packet_type != PacketType.AUDIO:
+            raise PacketError("only audio packets can be played")
+        if packet.sample_format != SampleFormat.FLOAT32_LE:
+            raise PacketError(
+                f"Python receiver does not support sample format {packet.sample_format}"
+            )
         audio_format = (packet.sample_rate, packet.channels)
         if self._format is None:
             try:
@@ -74,7 +81,7 @@ class FloatAudioPlayer:
             if audio is not None:
                 audio.terminate()
 
-    def __enter__(self) -> "FloatAudioPlayer":
+    def __enter__(self) -> FloatAudioPlayer:
         return self
 
     def __exit__(self, exc_type, exc, traceback) -> None:
@@ -91,18 +98,24 @@ class UdpAudioReceiver:
         self.packets_received = 0
         self.invalid_packets = 0
         self.packets_lost = 0
+        self._stream_id: int | None = None
         self._last_sequence: int | None = None
 
     def serve_forever(self) -> None:
         """Bind the UDP port and stream valid packets to the default speakers."""
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp, FloatAudioPlayer() as player:
+        with (
+            socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp,
+            FloatAudioPlayer() as player,
+        ):
             udp.bind(self.bind_address)
             udp.settimeout(0.5)
-            print(f"Listening for UDP audio on {self.bind_address[0]}:{udp.getsockname()[1]}")
+            print(
+                f"Listening for UDP audio on {self.bind_address[0]}:{udp.getsockname()[1]}"
+            )
             while True:
                 try:
                     datagram, _source = udp.recvfrom(MAX_DATAGRAM_SIZE + 1)
-                except socket.timeout:
+                except TimeoutError:
                     continue
 
                 try:
@@ -112,7 +125,16 @@ class UdpAudioReceiver:
                     print(f"Ignoring invalid UDP audio packet: {exc}", file=sys.stderr)
                     continue
 
-                if not self._accept_sequence(packet.sequence_number):
+                if not self._accept_sequence(packet.sequence_number, packet.stream_id):
+                    continue
+                if packet.packet_type != PacketType.AUDIO:
+                    continue
+                if packet.sample_format != SampleFormat.FLOAT32_LE:
+                    self.invalid_packets += 1
+                    print(
+                        f"Ignoring unsupported sample format: {packet.sample_format}",
+                        file=sys.stderr,
+                    )
                     continue
                 player.play(packet)
                 self.packets_received += 1
@@ -122,7 +144,11 @@ class UdpAudioReceiver:
                         f"lost={self.packets_lost}, invalid={self.invalid_packets}"
                     )
 
-    def _accept_sequence(self, sequence_number: int) -> bool:
+    def _accept_sequence(self, sequence_number: int, stream_id: int = 1) -> bool:
+        if stream_id != self._stream_id:
+            self._stream_id = stream_id
+            self._last_sequence = sequence_number
+            return True
         if self._last_sequence is None:
             self._last_sequence = sequence_number
             return True
@@ -138,7 +164,9 @@ class UdpAudioReceiver:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bind", default="0.0.0.0", help="local interface to listen on")
+    parser.add_argument(
+        "--bind", default="0.0.0.0", help="local interface to listen on"
+    )
     parser.add_argument("--port", type=int, default=5005, help="UDP port")
     args = parser.parse_args()
     receiver = UdpAudioReceiver(args.bind, args.port)

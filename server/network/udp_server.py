@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import queue
+import secrets
 import socket
 import time
 
@@ -11,6 +12,7 @@ from server.audio.capture import AudioChunk, AudioFormat, WasapiLoopbackCapture
 from server.network.protocol import (
     UINT32_MASK,
     AudioPacket,
+    ProtocolVersion,
     encode_packet,
     split_pcm_payload,
 )
@@ -20,12 +22,20 @@ class UdpAudioServer:
     """Packetize float32 capture chunks and send them to one UDP destination."""
 
     def __init__(
-        self, destination_host: str = "127.0.0.1", destination_port: int = 5005
+        self,
+        destination_host: str = "127.0.0.1",
+        destination_port: int = 5005,
+        protocol_version: ProtocolVersion | int = ProtocolVersion.CURRENT,
     ):
         if not 1 <= destination_port <= 65535:
             raise ValueError("destination_port must be between 1 and 65535")
         self.destination = (destination_host, destination_port)
+        try:
+            self.protocol_version = ProtocolVersion(protocol_version)
+        except ValueError as exc:
+            raise ValueError(f"unsupported protocol version: {protocol_version}") from exc
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.stream_id = secrets.randbits(64) or 1
         self._next_sequence = 0
         self.packets_sent = 0
 
@@ -59,6 +69,8 @@ class UdpAudioServer:
                 sample_rate=audio_format.sample_rate,
                 channels=audio_format.channels,
                 payload=payload,
+                stream_id=self.stream_id,
+                protocol_version=self.protocol_version,
             )
             self._socket.sendto(encode_packet(packet), self.destination)
             self._next_sequence = (self._next_sequence + 1) & UINT32_MASK
@@ -105,11 +117,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="127.0.0.1", help="receiver IP address")
     parser.add_argument("--port", type=int, default=5005, help="receiver UDP port")
+    parser.add_argument(
+        "--protocol-version",
+        type=int,
+        choices=(1, 2),
+        default=2,
+        help="wire version (use 1 only for the original receiver)",
+    )
     args = parser.parse_args()
 
     with (
         WasapiLoopbackCapture() as capture,
-        UdpAudioServer(args.host, args.port) as sender,
+        UdpAudioServer(args.host, args.port, args.protocol_version) as sender,
     ):
         assert capture.format is not None
         print(f"Capturing from: {capture.device_name}")
