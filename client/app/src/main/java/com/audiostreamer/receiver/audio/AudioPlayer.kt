@@ -1,27 +1,32 @@
-package com.example.android.audio
+package com.audiostreamer.receiver.audio
 
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.Build
 import android.os.Process
-import com.example.android.network.AudioPacket
-import com.example.android.network.PacketType
-import com.example.android.network.SampleFormat
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
+import android.os.SystemClock
+import com.audiostreamer.receiver.network.AudioPacket
+import com.audiostreamer.receiver.network.PacketType
+import com.audiostreamer.receiver.network.SampleFormat
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.Executors
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 data class PlaybackDiagnostics(
     val bufferCapacityFrames: Int = 0,
@@ -44,6 +49,9 @@ class AudioPlayer(
             }, "AudioTrackWriter").apply { isDaemon = true }
         }
         .asCoroutineDispatcher()
+    private val ownsDispatcher = dispatcher == null
+    private val closed = AtomicBoolean(false)
+    private val closeMutex = Mutex()
     private val queuedPackets = AtomicInteger(0)
     private val droppedPackets = AtomicLong(0)
     private val packets = Channel<AudioPacket>(
@@ -52,14 +60,16 @@ class AudioPlayer(
         onUndeliveredElement = {
             queuedPackets.decrementAndGet()
             droppedPackets.incrementAndGet()
-            onQueueDrop()
+            runCatching { onQueueDrop() }
         },
     )
 
     @Volatile private var track: AudioTrack? = null
+    @Volatile private var playbackJob: Job? = null
     private var activeFormat: Pair<Int, Int>? = null
     private var framesWritten = 0L
     private var lastDiagnosticsAt = 0L
+    private val sampleScratch = FloatArray(MAX_SAMPLES_PER_DATAGRAM)
 
     init {
         require(packetQueueCapacity > 0) { "packet queue capacity must be positive" }
@@ -67,41 +77,67 @@ class AudioPlayer(
 
     /** Adds a packet without blocking the network receive loop. Old audio is dropped on overflow. */
     fun enqueue(packet: AudioPacket): Boolean {
+        if (closed.get()) return false
         queuedPackets.incrementAndGet()
         val result = packets.trySend(packet)
         if (result.isFailure) queuedPackets.decrementAndGet()
         return result.isSuccess
     }
 
+    @Synchronized
     fun start(
         scope: CoroutineScope,
         onDiagnostics: (PlaybackDiagnostics) -> Unit,
         onError: (Throwable) -> Unit,
-    ): Job = scope.launch(playbackDispatcher) {
-        try {
-            for (packet in packets) {
-                queuedPackets.decrementAndGet()
-                if (packet.packetType != PacketType.AUDIO || packet.sampleFormat != SampleFormat.FLOAT32_LE) {
-                    continue
-                }
-                ensureTrack(packet.sampleRate, packet.channels)
-                writePacket(packet)
-
-                val now = android.os.SystemClock.elapsedRealtime()
-                if (now - lastDiagnosticsAt >= 250) {
-                    onDiagnostics(currentDiagnostics())
-                    lastDiagnosticsAt = now
-                }
+    ): Job {
+        check(!closed.get()) { "Audio player is closed" }
+        check(playbackJob == null) { "Audio player is already started" }
+        val job = scope.launch(playbackDispatcher) {
+            try {
+                consumePackets(onDiagnostics)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                runCatching { onError(error) }
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Throwable) {
-            onError(error)
+        }
+        playbackJob = job
+        return job
+    }
+
+    private suspend fun consumePackets(onDiagnostics: (PlaybackDiagnostics) -> Unit) {
+        while (true) {
+            val received = withTimeoutOrNull(DIAGNOSTICS_INTERVAL_MS) {
+                packets.receiveCatching()
+            }
+            if (received == null) {
+                reportDiagnostics(onDiagnostics, force = true)
+                continue
+            }
+
+            val packet = received.getOrNull() ?: break
+            queuedPackets.decrementAndGet()
+            if (packet.packetType != PacketType.AUDIO || packet.sampleFormat != SampleFormat.FLOAT32_LE) {
+                continue
+            }
+            ensureTrack(packet.sampleRate, packet.channels)
+            writePacket(packet)
+            reportDiagnostics(onDiagnostics)
         }
     }
 
+    private fun reportDiagnostics(
+        callback: (PlaybackDiagnostics) -> Unit,
+        force: Boolean = false,
+    ) {
+        val now = SystemClock.elapsedRealtime()
+        if (!force && now - lastDiagnosticsAt < DIAGNOSTICS_INTERVAL_MS) return
+        lastDiagnosticsAt = now
+        callback(currentDiagnostics())
+    }
+
     private fun ensureTrack(sampleRate: Int, channels: Int) {
-        require(channels == 2) { "Android POC supports stereo audio only" }
+        require(channels == 2) { "Android receiver supports stereo audio only" }
         if (activeFormat == (sampleRate to channels) && track?.state == AudioTrack.STATE_INITIALIZED) {
             return
         }
@@ -110,7 +146,9 @@ class AudioPlayer(
         val channelConfig = AudioFormat.CHANNEL_OUT_STEREO
         val encoding = AudioFormat.ENCODING_PCM_FLOAT
         val minBufferBytes = AudioTrack.getMinBufferSize(sampleRate, channelConfig, encoding)
-        require(minBufferBytes > 0) { "AudioTrack rejected $sampleRate Hz float stereo format ($minBufferBytes)" }
+        require(minBufferBytes > 0) {
+            "AudioTrack rejected $sampleRate Hz float stereo format ($minBufferBytes)"
+        }
 
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -132,11 +170,18 @@ class AudioPlayer(
         }
 
         val newTrack = builder.build()
-        check(newTrack.state == AudioTrack.STATE_INITIALIZED) { "AudioTrack initialization failed" }
-        newTrack.play()
         track = newTrack
-        activeFormat = sampleRate to channels
-        framesWritten = 0L
+        try {
+            check(newTrack.state == AudioTrack.STATE_INITIALIZED) {
+                "AudioTrack initialization failed"
+            }
+            newTrack.play()
+            activeFormat = sampleRate to channels
+            framesWritten = 0L
+        } catch (error: Exception) {
+            releaseTrack()
+            throw error
+        }
     }
 
     private fun writePacket(packet: AudioPacket) {
@@ -145,18 +190,23 @@ class AudioPlayer(
             "PCM payload is not aligned to complete stereo frames"
         }
         val sampleCount = packet.payload.size / Float.SIZE_BYTES
-        val samples = FloatArray(sampleCount)
-        ByteBuffer.wrap(packet.payload)
-            .order(ByteOrder.LITTLE_ENDIAN)
-            .asFloatBuffer()
-            .get(samples)
+        require(sampleCount <= sampleScratch.size) { "PCM payload exceeds the supported datagram size" }
+        val payload = packet.payload
+        for (sampleIndex in 0 until sampleCount) {
+            val offset = sampleIndex * Float.SIZE_BYTES
+            val bits = (payload[offset].toInt() and 0xFF) or
+                ((payload[offset + 1].toInt() and 0xFF) shl 8) or
+                ((payload[offset + 2].toInt() and 0xFF) shl 16) or
+                ((payload[offset + 3].toInt() and 0xFF) shl 24)
+            sampleScratch[sampleIndex] = Float.fromBits(bits)
+        }
 
         var sampleOffset = 0
-        while (sampleOffset < samples.size) {
+        while (sampleOffset < sampleCount) {
             val written = output.write(
-                samples,
+                sampleScratch,
                 sampleOffset,
-                samples.size - sampleOffset,
+                sampleCount - sampleOffset,
                 AudioTrack.WRITE_BLOCKING,
             )
             check(written > 0) { "AudioTrack.write failed with code $written" }
@@ -180,11 +230,29 @@ class AudioPlayer(
         )
     }
 
-    fun close() {
-        packets.close()
-        releaseTrack()
-        if (dispatcher == null) {
-            (playbackDispatcher as ExecutorCoroutineDispatcher).close()
+    /** Cancel consumption, wait for the audio thread, then release AudioTrack on that thread. */
+    suspend fun closeAndJoin() {
+        withContext(NonCancellable) {
+            closeMutex.lock()
+            try {
+                val shouldClose = synchronized(this@AudioPlayer) {
+                    if (closed.compareAndSet(false, true)) {
+                        packets.cancel()
+                        true
+                    } else {
+                        false
+                    }
+                }
+                if (shouldClose) {
+                    playbackJob?.cancelAndJoin()
+                    withContext(playbackDispatcher) { releaseTrack() }
+                    if (ownsDispatcher) {
+                        (playbackDispatcher as ExecutorCoroutineDispatcher).close()
+                    }
+                }
+            } finally {
+                closeMutex.unlock()
+            }
         }
     }
 
@@ -196,7 +264,12 @@ class AudioPlayer(
             runCatching { oldTrack.pause() }
             runCatching { oldTrack.flush() }
             runCatching { oldTrack.stop() }
-            oldTrack.release()
+            runCatching { oldTrack.release() }
         }
+    }
+
+    private companion object {
+        const val DIAGNOSTICS_INTERVAL_MS = 250L
+        const val MAX_SAMPLES_PER_DATAGRAM = 1200 / Float.SIZE_BYTES
     }
 }

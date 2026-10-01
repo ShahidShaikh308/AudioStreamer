@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.iml
 *.log
+/logs/*.log*
 .gradle
 /local.properties
 /.idea/caches
@@ -17,6 +18,7 @@ __pycache__/
 /.idea/deploymentTargetDropDown.xml
 .DS_Store
 /build
+/client/build/
 app/build/
 /captures
 .externalNativeBuild

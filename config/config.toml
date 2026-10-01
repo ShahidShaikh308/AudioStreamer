@@ -1,0 +1,12 @@
+# Set receiver_ip to the Android phone's IPv4 address on your Wi-Fi network.
+# Keep 127.0.0.1 to test with a local receiver on this PC.
+receiver_ip = "127.0.0.1"
+receiver_port = 5005
+protocol_version = 2
+
+# Capture callback size and bounded queue. Smaller buffers reduce latency but
+# leave less scheduling margin on a busy PC.
+capture_queue_chunks = 8
+frames_per_buffer = 480
+
+log_level = "INFO"

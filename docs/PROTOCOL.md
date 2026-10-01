@@ -96,7 +96,7 @@ specify its own versioning and byte order.
 | 4 | `PCM_S32_LE` | 4 | Signed 32-bit integer PCM, little endian |
 | Other | Unassigned | — | Preserve/skip if possible; never guess an encoding |
 
-The current Python sender emits `FLOAT32_LE`. The Python playback receiver
+The current Windows sender emits `FLOAT32_LE`. The Android playback receiver
 currently plays only that format. For audio packets, payload length must be a
 multiple of `channel_count × bytes_per_sample`. Each sample frame contains one
 sample for each channel, in channel order.
@@ -175,7 +175,7 @@ distance below 2^31 is considered newer.
 
 ## Current implementation scope
 
-The Python protocol modules serialize and parse v1 and v2. The Python sender
-uses v2 by default and can emit v1 with `--protocol-version 1`. The Python
-receiver accepts both versions, but plays only v2/v1 float32 audio. Android,
-ESP32, and STM32 implementations are not included here.
+The Windows protocol modules serialize and parse v1 and v2 for compatibility;
+the Windows sender emits v2. The Android receiver accepts both versions, but
+plays only v2/v1 float32 audio. ESP32 and STM32 implementations are not included
+here.

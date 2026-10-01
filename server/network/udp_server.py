@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import argparse
+import logging
 import queue
 import secrets
 import socket
 import time
+from collections.abc import Callable
+from threading import Event
 
 from server.audio.capture import AudioChunk, AudioFormat, WasapiLoopbackCapture
 from server.network.protocol import (
@@ -14,8 +16,10 @@ from server.network.protocol import (
     AudioPacket,
     ProtocolVersion,
     encode_packet,
-    split_pcm_payload,
+    iter_pcm_payloads,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class UdpAudioServer:
@@ -33,7 +37,9 @@ class UdpAudioServer:
         try:
             self.protocol_version = ProtocolVersion(protocol_version)
         except ValueError as exc:
-            raise ValueError(f"unsupported protocol version: {protocol_version}") from exc
+            raise ValueError(
+                f"unsupported protocol version: {protocol_version}"
+            ) from exc
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.stream_id = secrets.randbits(64) or 1
         self._next_sequence = 0
@@ -59,7 +65,7 @@ class UdpAudioServer:
         frame_offset = 0
         frame_size = audio_format.channels * audio_format.sample_width_bytes
         count = 0
-        for payload in split_pcm_payload(chunk.data, audio_format.channels):
+        for payload in iter_pcm_payloads(chunk.data, audio_format.channels):
             packet = AudioPacket(
                 sequence_number=self._next_sequence,
                 timestamp_ns=(
@@ -79,27 +85,32 @@ class UdpAudioServer:
             frame_offset += len(payload) // frame_size
         return count
 
-    def stream_capture(self, capture: WasapiLoopbackCapture) -> None:
-        """Forward chunks from an already-started capture until interrupted."""
+    def stream_capture(
+        self,
+        capture: WasapiLoopbackCapture,
+        *,
+        stop_event: Event | None = None,
+        on_stats: Callable[[int, int], None] | None = None,
+    ) -> None:
+        """Forward captured chunks until its optional stop event is set."""
         if capture.format is None:
             raise RuntimeError("capture must be started before streaming")
 
-        print(
-            f"Sending {capture.format.sample_rate} Hz, {capture.format.channels}-channel "
-            f"float32 audio to {self.destination[0]}:{self.destination[1]}"
-        )
         last_report = time.monotonic()
-        while True:
+        while stop_event is None or not stop_event.is_set():
             try:
                 chunk = capture.read(timeout=0.5)
             except queue.Empty:
                 continue
             self.send_chunk(chunk, capture.format)
             now = time.monotonic()
-            if now - last_report >= 5.0:
-                print(
-                    f"Sent {self.packets_sent} packets; "
-                    f"capture queue drops={capture.dropped_chunks}"
+            if now - last_report >= 0.25:
+                if on_stats is not None:
+                    on_stats(self.packets_sent, capture.dropped_chunks)
+                logger.debug(
+                    "Sent %d packets; capture queue drops=%d",
+                    self.packets_sent,
+                    capture.dropped_chunks,
                 )
                 last_report = now
 
@@ -111,32 +122,3 @@ class UdpAudioServer:
 
     def __exit__(self, exc_type, exc, traceback) -> None:
         self.close()
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", default="127.0.0.1", help="receiver IP address")
-    parser.add_argument("--port", type=int, default=5005, help="receiver UDP port")
-    parser.add_argument(
-        "--protocol-version",
-        type=int,
-        choices=(1, 2),
-        default=2,
-        help="wire version (use 1 only for the original receiver)",
-    )
-    args = parser.parse_args()
-
-    with (
-        WasapiLoopbackCapture() as capture,
-        UdpAudioServer(args.host, args.port, args.protocol_version) as sender,
-    ):
-        assert capture.format is not None
-        print(f"Capturing from: {capture.device_name}")
-        try:
-            sender.stream_capture(capture)
-        except KeyboardInterrupt:
-            print("\nUDP audio sender stopped.")
-
-
-if __name__ == "__main__":
-    main()

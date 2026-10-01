@@ -1,4 +1,4 @@
-package com.example.android.ui.theme
+package com.audiostreamer.receiver.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

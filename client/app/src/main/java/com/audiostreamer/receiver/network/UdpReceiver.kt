@@ -1,12 +1,12 @@
-package com.example.android.network
+package com.audiostreamer.receiver.network
 
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
-import java.net.SocketException
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -16,10 +16,14 @@ import kotlinx.coroutines.launch
 data class NetworkDiagnostics(
     val isListening: Boolean = false,
     val isConnected: Boolean = false,
+    val hasReceivedAudio: Boolean = false,
+    val lastPacketInvalid: Boolean = false,
+    val lastInvalidReason: String? = null,
     val sampleRate: Int = 0,
     val channels: Int = 0,
     val packetsReceived: Long = 0,
     val droppedPackets: Long = 0,
+    val invalidPackets: Long = 0,
 )
 
 /** Receives and validates UDP packets on Dispatchers.IO. */
@@ -34,6 +38,9 @@ class UdpReceiver(
     private var lastAudioAtMs = 0L
     private var packetsReceived = 0L
     private var droppedPackets = 0L
+    private var invalidPackets = 0L
+    private var lastPacketInvalid = false
+    private var lastInvalidReason: String? = null
     private var lastStatusAtMs = 0L
     private var currentRate = 0
     private var currentChannels = 0
@@ -42,27 +49,36 @@ class UdpReceiver(
         require(port in 1..65535) { "UDP port must be between 1 and 65535" }
     }
 
+    @Synchronized
     fun start(
         scope: CoroutineScope,
         onPacket: (AudioPacket) -> Unit,
         onDiagnostics: (NetworkDiagnostics) -> Unit,
         onError: (Throwable) -> Unit,
     ): Job {
-        check(receiveJob?.isActive != true) { "UDP receiver is already running" }
-        receiveJob = scope.launch(Dispatchers.IO) {
+        check(receiveJob == null) { "UDP receiver is already running or stopping" }
+        resetDiagnostics()
+
+        val job = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            var localSocket: DatagramSocket? = null
             try {
-                DatagramSocket(null).use { udp ->
-                    udp.reuseAddress = true
-                    udp.bind(InetSocketAddress(port))
-                    udp.soTimeout = RECEIVE_TIMEOUT_MS
-                    socket = udp
+                val udp = DatagramSocket(null)
+                localSocket = udp
+                udp.use {
+                    it.reuseAddress = true
+                    it.bind(InetSocketAddress(port))
+                    it.soTimeout = RECEIVE_TIMEOUT_MS
+                    socket = it
                     emitDiagnostics(onDiagnostics, force = true)
 
                     val buffer = ByteArray(MAX_DATAGRAM_SIZE + 1)
+                    val datagram = DatagramPacket(buffer, buffer.size)
                     while (currentCoroutineContext().isActive) {
-                        val datagram = DatagramPacket(buffer, buffer.size)
+                        // receive() updates packet.length to the last datagram size.
+                        // Restore capacity so a later full-size datagram is not truncated.
+                        datagram.length = buffer.size
                         try {
-                            udp.receive(datagram)
+                            it.receive(datagram)
                         } catch (_: SocketTimeoutException) {
                             emitDiagnostics(onDiagnostics)
                             continue
@@ -70,8 +86,11 @@ class UdpReceiver(
 
                         val packet = try {
                             parser.parse(datagram.data, datagram.length)
-                        } catch (_: PacketParseException) {
+                        } catch (error: PacketParseException) {
+                            invalidPackets++
                             droppedPackets++
+                            lastPacketInvalid = true
+                            lastInvalidReason = error.message
                             emitDiagnostics(onDiagnostics)
                             continue
                         }
@@ -86,22 +105,43 @@ class UdpReceiver(
                         currentRate = packet.sampleRate
                         currentChannels = packet.channels
                         lastAudioAtMs = android.os.SystemClock.elapsedRealtime()
+                        lastPacketInvalid = false
+                        lastInvalidReason = null
                         onPacket(packet)
                         emitDiagnostics(onDiagnostics)
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (error: SocketException) {
-                if (currentCoroutineContext().isActive) onError(error)
-            } catch (error: Throwable) {
-                if (currentCoroutineContext().isActive) onError(error)
+            } catch (error: Exception) {
+                if (currentCoroutineContext().isActive) runCatching { onError(error) }
             } finally {
-                socket = null
+                if (socket === localSocket) socket = null
                 emitDiagnostics(onDiagnostics, force = true, listening = false)
             }
         }
-        return receiveJob!!
+        receiveJob = job
+        job.invokeOnCompletion {
+            synchronized(this@UdpReceiver) {
+                if (receiveJob === job) receiveJob = null
+            }
+        }
+        job.start()
+        return job
+    }
+
+    private fun resetDiagnostics() {
+        streamId = null
+        lastSequence = null
+        lastAudioAtMs = 0L
+        packetsReceived = 0L
+        droppedPackets = 0L
+        invalidPackets = 0L
+        lastPacketInvalid = false
+        lastInvalidReason = null
+        lastStatusAtMs = 0L
+        currentRate = 0
+        currentChannels = 0
     }
 
     private fun acceptSequence(packet: AudioPacket): Boolean {
@@ -133,22 +173,28 @@ class UdpReceiver(
         if (!force && now - lastStatusAtMs < STATUS_INTERVAL_MS) return
         lastStatusAtMs = now
         val connected = listening && lastAudioAtMs != 0L && now - lastAudioAtMs < CONNECTION_TIMEOUT_MS
-        callback(
-            NetworkDiagnostics(
-                isListening = listening,
-                isConnected = connected,
-                sampleRate = currentRate,
-                channels = currentChannels,
-                packetsReceived = packetsReceived,
-                droppedPackets = droppedPackets,
-            ),
+        val diagnostics = NetworkDiagnostics(
+            isListening = listening,
+            isConnected = connected,
+            hasReceivedAudio = packetsReceived > 0,
+            lastPacketInvalid = lastPacketInvalid,
+            lastInvalidReason = lastInvalidReason,
+            sampleRate = currentRate,
+            channels = currentChannels,
+            packetsReceived = packetsReceived,
+            droppedPackets = droppedPackets,
+            invalidPackets = invalidPackets,
         )
+        runCatching { callback(diagnostics) }
     }
 
-    fun stop() {
-        socket?.close() // Closing the socket unblocks DatagramSocket.receive().
-        receiveJob?.cancel()
-        receiveJob = null
+    /** Close the socket first so a blocking receive wakes immediately, then cancel the job. */
+    @Synchronized
+    fun stop(): Job? {
+        val job = receiveJob ?: return null
+        socket?.close()
+        job.cancel()
+        return job
     }
 
     private companion object {

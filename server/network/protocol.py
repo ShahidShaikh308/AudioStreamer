@@ -2,10 +2,12 @@
 
 New code may import models and operations from ``packet``, ``serializer``, and
 ``parser`` directly. This module retains the original project's names so its
-UDP sender and receiver can continue to operate through the refactor.
+UDP sender can keep using the compact serialization API.
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterator
 
 from .constants import (
     CURRENT_VERSION,
@@ -31,7 +33,12 @@ SAMPLE_FORMAT_FLOAT32_LE = int(SampleFormat.FLOAT32_LE)
 
 
 def split_pcm_payload(payload: bytes, channels: int) -> list[bytes]:
-    """Split float32 PCM into frame-aligned payloads within the v2 MTU limit."""
+    """Compatibility helper returning all frame-aligned PCM payloads as a list."""
+    return list(iter_pcm_payloads(payload, channels))
+
+
+def iter_pcm_payloads(payload: bytes, channels: int) -> Iterator[bytes]:
+    """Yield frame-aligned PCM slices within the v2 MTU limit, one at a time."""
     if channels < 1:
         raise PacketError("channel count must be positive")
     if not payload:
@@ -42,10 +49,8 @@ def split_pcm_payload(payload: bytes, channels: int) -> list[bytes]:
     packet_payload_size = (MAX_PAYLOAD_SIZE // frame_size) * frame_size
     if packet_payload_size == 0:
         raise PacketError("channel count leaves no room for an audio frame")
-    return [
-        payload[offset : offset + packet_payload_size]
-        for offset in range(0, len(payload), packet_payload_size)
-    ]
+    for offset in range(0, len(payload), packet_payload_size):
+        yield payload[offset : offset + packet_payload_size]
 
 
 __all__ = [
@@ -67,6 +72,7 @@ __all__ = [
     "SerializationError",
     "decode_packet",
     "encode_packet",
+    "iter_pcm_payloads",
     "parse_packet",
     "serialize_packet",
     "split_pcm_payload",

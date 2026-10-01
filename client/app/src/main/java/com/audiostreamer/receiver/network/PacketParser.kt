@@ -1,4 +1,4 @@
-package com.example.android.network
+package com.audiostreamer.receiver.network
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -43,7 +43,9 @@ class PacketParser {
         if (length < 5) throw PacketParseException("Datagram is too short to identify the protocol")
         if (length > MAX_DATAGRAM_SIZE) throw PacketParseException("Datagram exceeds 1200 bytes")
         if (length > datagram.size) throw PacketParseException("Length exceeds input buffer")
-        if (!datagram.copyOfRange(0, 4).contentEquals(MAGIC)) {
+        if (datagram[0] != MAGIC[0] || datagram[1] != MAGIC[1] ||
+            datagram[2] != MAGIC[2] || datagram[3] != MAGIC[3]
+        ) {
             throw PacketParseException("Invalid protocol magic")
         }
 
