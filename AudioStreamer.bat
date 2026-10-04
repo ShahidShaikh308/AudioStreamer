@@ -26,14 +26,14 @@ if not exist ".venv\Scripts\python.exe" (
     echo Preparing AudioStreamer for first use. This may take a few minutes.
     %PYTHON% -m venv .venv
     if errorlevel 1 goto :failed
-    .venv\Scripts\python.exe -m pip install --disable-pip-version-check -r requirements.txt
+    .venv\Scripts\python.exe -m pip install --disable-pip-version-check -r platforms\windows\requirements.txt
     if errorlevel 1 goto :failed
 )
 
 .venv\Scripts\python.exe -c "from importlib.metadata import version; import pyaudiowpatch; raise SystemExit(version('PyAudioWPatch') != '0.2.12.8')" >nul 2>nul
 if errorlevel 1 (
     echo Installing the AudioStreamer audio dependency.
-    .venv\Scripts\python.exe -m pip install --disable-pip-version-check -r requirements.txt
+    .venv\Scripts\python.exe -m pip install --disable-pip-version-check -r platforms\windows\requirements.txt
     if errorlevel 1 goto :failed
 )
 

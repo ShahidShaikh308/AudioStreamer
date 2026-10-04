@@ -1,26 +1,56 @@
+# Python environments and bytecode
 .venv/
+venv/
 __pycache__/
-*.pyc
-*.iml
+*.py[cod]
+*$py.class
+
+# Python tooling and packaging
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Runtime configuration secrets and local overrides
+.env
+.env.*
+!.env.example
+config/*.local.toml
+
+# Runtime output
+logs/
+recordings/
 *.log
-/logs/*.log*
-.gradle
-/local.properties
-/.idea/caches
-/.idea/tasks.xml
-/.idea/libraries
-/.idea/dictionaries
-/.idea/repositories.xml
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-/.idea/deploymentTargetDropDown.xml
-.DS_Store
-/build
-/client/build/
-app/build/
-/captures
-.externalNativeBuild
-.cxx
+*.log.*
+
+# Android / Gradle generated files (source Gradle configuration stays tracked)
+.gradle/
+**/build/
+**/.cxx/
+**/.externalNativeBuild/
 local.properties
+
+# IDE and editor state
+.idea/caches/
+.idea/shelf/
+.idea/workspace.xml
+.idea/deviceManager.xml
+**/.idea/caches/
+**/.idea/shelf/
+**/.idea/workspace.xml
+**/.idea/deviceManager.xml
+.vscode/
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+platforms/android/.gradle-user/

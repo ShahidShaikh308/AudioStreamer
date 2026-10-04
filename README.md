@@ -1,138 +1,118 @@
-# AudioStreamer v0.4
+# AudioStreamer
 
-AudioStreamer captures the Windows default playback mix with WASAPI loopback and sends the captured float32 PCM to one Android receiver over a local Wi-Fi network. The Android application parses AudioStreamer protocol v2 packets and plays them through `AudioTrack`.
+AudioStreamer is a learning project for low-latency PCM transport between networked devices. Windows and Android can independently send protocol v3 PCM and receive/play protocol v3 streams. Windows captures the system mix with WASAPI loopback; Android uses its playback-capture API where the OS and source app permit it.
 
-This is a local-network release for learning and listening tests. UDP delivery is best effort: packet loss or Wi-Fi congestion can cause audible gaps. There is no discovery, retransmission, compression, encryption, internet relay, or multi-receiver selection.
+The repository separates the **Audio Plane** from the future **Control Plane** and places a platform-neutral node contract above platform implementations. Audio moves only through the Audio Plane. Device discovery, registration, and routing belong to a separate Control Plane and are not implemented. Current endpoint selection is static configuration; there are no permanent server/client concepts in the intended architecture, only node capabilities and runtime roles.
+
+## Current implementation
+
+| Capability | Status |
+| --- | --- |
+| Windows WASAPI loopback capture | Implemented with PyAudioWPatch |
+| PCM model and protocol v3 serialization | Implemented; `PROTOCOL.md` is normative |
+| Windows UDP sending and receiving | Implemented as independent node capabilities |
+| Windows playback | Implemented through PyAudioWPatch/PortAudio |
+| Android UDP send, receive, protocol v3, bounded buffering, `AudioTrack` playback | Implemented for stereo float32 |
+| Android mixed playback capture | Implemented on Android 10+ with user consent and source-app policy restrictions |
+| Control Plane discovery and routing | Not implemented |
+| Multiple destinations, compression, encryption | Not implemented |
+
+Protocol v3 is the wire format currently used by both implementations. This refactor preserves the packet layout and stream behavior. Its v3 format is not wire-compatible with the retired v2 layout; update the Windows sender and Android receiver together.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Apps[Windows applications] --> Mix[Windows Audio Engine]
-  Mix --> Capture[WASAPI loopback capture]
-  Capture --> Server[Python desktop server]
-  Server -->|float32 PCM in protocol v2 / UDP| Receiver[Android UDP receiver]
-  Receiver --> Parser[Packet parser]
-  Parser --> Queue[Bounded playback queue]
-  Queue --> Track[AudioTrack]
-  Track --> Speaker[Phone speaker]
+  subgraph AUDIO_PLANE[Audio Plane — PCM only]
+    W[Windows WASAPI capture] --> M[PCM chunk model]
+    M --> S[Protocol v3 packetization and UDP sender]
+    S -->|PCM audio datagrams| R[UDP receiver and protocol parser]
+    R --> Q[Duration-bounded playback queue]
+    Q --> AT[Platform playback]
+    AT --> WP[Windows PortAudio output]
+    AT --> ANDROID_TRACK[Android AudioTrack]
+  end
+  subgraph CP[Control Plane — orchestration only, planned]
+    D[Discovery, registration, routing, selection]
+  end
+  D -. CONNECT / STOP / DISCONNECT / STATUS .-> S
+  D -. CONNECT / STOP / DISCONNECT / STATUS .-> R
 ```
 
-The server uses the Windows endpoint's mix format. The Android receiver currently supports stereo `FLOAT32_LE` audio and listens on UDP port `5005` by default. Protocol layout and validation rules are documented in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+The dashed control path carries commands/status only. The Control Plane never carries PCM, and Audio Plane modules must not depend on discovery, UI, routing, or hardware controllers. See [ARCHITECTURE.md](ARCHITECTURE.md) for plane boundaries and [docs/NODE_ARCHITECTURE.md](docs/NODE_ARCHITECTURE.md) for node contracts, lifecycle, and Windows composition.
 
 ## Requirements
 
-### Windows server
+### Windows node
 
-- 64-bit Windows.
-- Python 3.13. The Python launcher (`py`) is recommended; Tkinter must be included with the Python installation.
-- Internet access for the first launcher run to install the pinned PyAudioWPatch dependency.
-- Windows playback audio routed through the default output device.
+- 64-bit Windows with capture and playback endpoints.
+- Python 3.13 and Tkinter.
+- Internet access for first-run installation of the pinned `PyAudioWPatch` dependency.
 
-### Android receiver
+### Android node
 
-- Android device with Android 7.0 (API 24) or newer.
-- Android Studio only if building from source; otherwise install the supplied debug APK.
-- The phone and PC must be on the same Wi-Fi/LAN. Guest networks and access-point client isolation can prevent devices from communicating.
+- Android 7.0 (API 24) or newer for receiving and playback. Android 10 (API 29) or newer for mixed playback capture and sending.
+- Android Studio to build from source, or install the debug APK generated by Gradle.
+- Windows and Android devices on the same reachable local network. Access-point client isolation can block UDP.
+- Sender requires the `RECORD_AUDIO` permission and a per-session user-approved MediaProjection capture prompt. Android 14/API 34+ also requires the declared media-projection foreground service permission. The app requests a foreground service notification while capture is active.
+- Because the app targets Android 17/API 37, local UDP send and receive require the runtime `ACCESS_LOCAL_NETWORK` permission. Earlier Android versions grant this access through `INTERNET`.
 
-## Installation
+## Run the system
 
-### Windows server
+1. On Windows, run `AudioStreamer.bat`. It creates `.venv`, installs `platforms/windows/requirements.txt` on first launch, and opens the node controls.
+2. Choose a destination IP/port and a local receive port, then save configuration if you want settings restored on the next launch.
+3. Start **Sender** and **Receiver** independently. Either can run alone or both can run simultaneously.
+4. For Windows-to-Android, set the Windows destination to the phone's local IP and Android receive port (default `5005`), then start both node lanes as needed.
+5. For Android-to-Windows, set Android's destination to the Windows local IP and receive port, grant local-network access and capture consent, then start the Android sender.
+6. For Android-to-Android, configure each node's destination and receive port to point to its peer. A node may send and receive simultaneously.
 
-1. Install Python 3.13 for Windows. Include the Python launcher or add Python to `PATH`.
-2. Start `AudioStreamer.bat` from the project folder. On first run it creates `.venv` and installs `requirements.txt`; this may take a few minutes.
-3. If Windows Defender Firewall prompts, allow AudioStreamer on private networks.
+UDP is connectionless. A Windows packet-sent count confirms only that the local socket accepted the datagram; it does not confirm phone receipt or playback. Stop the Windows stream before closing the receiver for a clean shutdown.
 
-The launcher checks for Python 3.13 and the expected PyAudioWPatch version. Configuration and logs are stored in the project folder.
+## Configuration and diagnostics
 
-### Android APK
+The Windows app loads and creates [`config/config.toml`](config/config.toml). Its GUI saves the node name, destination address/port, receive port, and capture settings. `audio_device_index = -1` means the default device and is reserved for future selection; current capture and playback use the default endpoints. Capture rate and channels follow the Windows endpoint mix format. The existing TOML keys `receiver_ip` and `receiver_port` remain as persisted names for the outbound peer destination. Android saves its node name, destination IP/port, receive port, and log level in app-private `SharedPreferences`.
 
-The debug APK is produced by the Android Gradle build at:
+Rotating Windows logs are written to `logs/audiostreamer.log`; Android lifecycle, capture, UDP, invalid-packet, queue-overflow, and playback diagnostics are available in Logcat. The receive path reports valid/invalid datagrams, sequence gaps, queue overflow, playback errors, and byte/packet totals. The software playback queue targets 80 ms of PCM with a hard packet-count ceiling. Protocol v3 has no synchronized sender timestamp, so one-way latency is unavailable.
 
-`client/app/build/outputs/apk/debug/app-debug.apk`
+## Build Android
 
-To build it from source, open the `client/` folder in Android Studio and run the `app` debug build, or run `:app:assembleDebug` from the Gradle wrapper in `client/`. Copy the APK to the phone and open it. Android will ask you to permit installing apps from that file source if it is not already allowed; approve that prompt, then complete installation. The debug APK is suitable for evaluation, not a signed public-store release.
+Open [`platforms/android`](platforms/android) in Android Studio, or from that directory run `gradlew.bat :app:assembleDebug`. The APK is written to `platforms/android/app/build/outputs/apk/debug/app-debug.apk`. The application ID remains `com.audiostreamer.receiver` to preserve Android's install identity across the source reorganization. This is a debug build, not a signed public-store release.
 
-## Configuration
+## Repository layout
 
-The server automatically creates and reads [`config/config.toml`](config/config.toml). Edit it before starting the server:
-
-```toml
-receiver_ip = "192.168.1.25"
-receiver_port = 5005
-protocol_version = 2
-capture_queue_chunks = 8
-frames_per_buffer = 480
-log_level = "INFO"
+```text
+audio_plane/                 Shared PCM types, protocol v3, UDP transport
+core/                        Platform-neutral node state, events, and audio contracts
+control_plane/               Reserved architectural boundary; no implementation yet
+platforms/windows/           WASAPI capture, PortAudio playback, desktop node/composition/UI
+platforms/android/           Android node application and platform adapters
+config/                      Windows user configuration
+logs/                         Runtime logs (generated)
+main.py                       Windows desktop entry point
+AudioStreamer.bat             Windows setup and launcher
+README.md                     Project overview and getting started
+ARCHITECTURE.md               Plane boundaries and module responsibilities
+docs/NODE_ARCHITECTURE.md     Node interfaces, lifecycle, and dependency injection
+PROTOCOL.md                   Normative v3 wire specification
+DEVELOPMENT.md                Contributor workflow and coding principles
+CHANGELOG.md                  Project evolution
 ```
-
-Use the phone's IPv4 address on the local Wi-Fi network for `receiver_ip`. The server GUI also lets you set the destination IP and port and saves the values. The Android app listens on port `5005`; if the server port is changed, its receiver must be changed to match.
-
-`protocol_version` defaults to v2. The server retains v1 transmit compatibility, but v2 is the release configuration and Android parser supports both versions. Do not change packet definitions to configure audio. The capture sample rate and channel count are derived from the Windows output device mix format; a different rate would require resampling, which this release does not add.
-
-The capture queue and `frames_per_buffer` trade latency against scheduling margin. Smaller values may reduce buffering but can increase drops on a busy PC. Start with defaults, then tune one value at a time while watching the server log and Android diagnostics.
-
-## Running the system
-
-1. Connect the Android phone and Windows PC to the same Wi-Fi network.
-2. Install and open **AudioStreamer Receiver** on Android.
-3. Tap **Start Receiver**. The app should show that it is waiting for the server.
-4. On Windows, run `AudioStreamer.bat`, enter the phone's IPv4 address, and select **Start Streaming**.
-5. Play audio on the PC. The receiver should show the incoming sample rate, channels, packet counts, drops, and playback queue.
-6. Stop streaming in the desktop window, then stop the receiver in Android.
-
-The receiver must be started first because UDP has no connection handshake. A server-side packet-sent count means the local operating system accepted the datagram for sending; it does not prove that the phone received or played it.
-
-## Diagnostics and logs
-
-The desktop GUI reports stream state, destination, packets sent, and errors. The rotating server log is written to `logs/audiostreamer.log`. The Android screen reports listener/connection status, sample rate, channel count, received and dropped packets, invalid packets, playback queue, and playback status. Keep the Android application in the foreground during playback.
 
 ## Troubleshooting
 
-| Symptom | Checks |
+| Symptom | Check |
 | --- | --- |
-| Receiver stays at “Waiting for server...” | Start the Windows stream; verify the phone IP and UDP port; confirm both devices are on the same non-isolated LAN. |
-| Server sends packets, but Android receives none | Check Windows Defender Firewall for private-network access, router client isolation, VPNs, and the configured phone IPv4 address. UDP has no acknowledgement, so the sender cannot confirm phone delivery. |
-| “Invalid packet” appears | Confirm the server is using protocol v2 and the Android app is the matching AudioStreamer receiver. Inspect `logs/audiostreamer.log` for server errors. |
-| Packets arrive, but there is no audible output | Raise phone media volume; verify the PC is playing through the default Windows output; check the displayed sample rate and channel count; stop and restart both sides. |
-| Audio gaps or dropped packets increase | Try the defaults first; reduce other Wi-Fi traffic; keep devices near the access point. A smaller capture buffer may reduce latency but can make scheduling drops more likely. |
-| The launcher reports Python/dependency errors | Install Python 3.13 with the launcher and Tkinter, ensure internet is available for first setup, and check `logs/audiostreamer.log` if present. |
-
-## Project structure
-
-```text
-AudioStreamer/
-├── AudioStreamer.bat             # Windows launcher and virtual-environment setup
-├── main.py                       # Desktop application entry point
-├── config/
-│   └── config.toml               # User-editable server settings
-├── server/
-│   ├── audio/capture.py          # WASAPI loopback capture
-│   ├── config.py                # Configuration loading and validation
-│   ├── gui.py                   # Start/stop desktop interface
-│   ├── main.py                  # Server lifecycle orchestration
-│   └── network/                 # Protocol v2 and UDP sender
-├── client/                       # Android Studio / Gradle project
-│   └── app/src/main/java/com/audiostreamer/receiver/
-│       ├── audio/AudioPlayer.kt
-│       ├── network/              # UDP receiver and protocol parser
-│       └── MainActivity.kt
-├── docs/PROTOCOL.md              # Wire format specification
-├── logs/                         # Runtime logs
-└── requirements.txt              # Python server dependency
-```
+| Android stays at “Waiting for server...” | Start the peer sender; check receive port, local-network permission on API 37+, Windows Firewall, VPN, and Wi-Fi client isolation. |
+| Android sender receives silence | Confirm Android 10+, accept both permission prompts, and use an app whose playback usage and capture policy allow capture. Some apps and protected media deliberately block capture. |
+| Android sender fails before capture | Check `RECORD_AUDIO`, MediaProjection consent, Android 14+ foreground-service permission/notification, and Logcat. |
+| Sender count rises but Android receives nothing | UDP has no acknowledgement. Verify the destination address and local network reachability. |
+| Windows receiver stays at “Waiting for audio” | Check the peer's destination IP and port against this node's receive port, Windows Firewall, and Wi-Fi client isolation. |
+| Windows receives packets but playback fails | Check the default Windows output device and `logs/audiostreamer.log` for PortAudio errors. |
+| Android reports invalid packets | Ensure both apps use protocol v3; consult [PROTOCOL.md](PROTOCOL.md). |
+| Packets arrive but there is no sound | Check phone media volume and Windows default output, then stop and restart both endpoints. |
+| Audio has gaps | Reduce competing Wi-Fi traffic. Smaller capture buffers can lower latency but increase scheduling sensitivity. |
+| Windows launcher fails | Install Python 3.13 with Tkinter and allow first-run dependency installation. Review `logs/audiostreamer.log`. |
 
 ## Roadmap
 
-- Complete a release-device smoke test for capture, UDP delivery, Android playback, and shutdown.
-- Produce a signed Android release APK once a release signing key and distribution channel are chosen.
-- Continue latency and stability measurements on representative Windows devices and Wi-Fi networks.
-- Later project stages may investigate additional receivers and the separate ESP32 control path described by the project plan. They are not part of v0.4.
-
-## Release notes and limitations
-
-- The v0.4 wire format is unchanged. Python keeps protocol compatibility code; Android parses v1 and v2, while the server defaults to v2.
-- One destination is configured at a time. The Android receiver uses the configured fixed listening port.
-- There is no receiver discovery or delivery acknowledgement.
-- This repository does not yet declare a software license. Choose and add one before public redistribution.
-- The checked-in project builds a debug APK. A public release still needs signing/distribution decisions and an end-to-end test on the target phone and network.
+The next work should complete device-level and long-duration validation, then add Control Plane capabilities as a separate system that issues commands without carrying audio. Multiple receivers, ESP32 control, compression, encryption, and discovery remain future work.
