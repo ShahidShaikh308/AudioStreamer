@@ -5,6 +5,8 @@ from __future__ import annotations
 from audio_plane.buffering.packet_queue import AudioPacketQueue
 from audio_plane.transport.udp_receiver import UdpAudioReceiver
 from audio_plane.transport.udp_sender import UdpAudioSender
+from control_plane.manager import ControlManager
+from control_plane.protocol import Capability
 from platforms.windows.capture.wasapi_loopback import WasapiLoopbackCapture
 from platforms.windows.desktop.config import WindowsNodeConfig
 from platforms.windows.desktop.node import WindowsAudioNode
@@ -15,7 +17,7 @@ def create_windows_node(config: WindowsNodeConfig | None = None) -> WindowsAudio
     """Construct the Windows node and inject its capture/network/audio adapters."""
     node_config = config or WindowsNodeConfig.load()
     node_config.validate()
-    return WindowsAudioNode(
+    node = WindowsAudioNode(
         node_config,
         capture_factory=lambda cfg: WasapiLoopbackCapture(
             queue_chunks=cfg.capture_queue_chunks,
@@ -26,3 +28,19 @@ def create_windows_node(config: WindowsNodeConfig | None = None) -> WindowsAudio
         queue_factory=lambda: AudioPacketQueue(target_buffer_ms=80),
         player_factory=lambda packets: PortAudioPlayer(packets),
     )
+    node.attach_control_manager(
+        ControlManager(
+            node_id=int(node_config.node_id, 16),
+            node_name=node_config.device_name,
+            platform="Windows",
+            capabilities=Capability.CAPTURE
+            | Capability.PLAYBACK
+            | Capability.SENDER
+            | Capability.RECEIVER,
+            receive_port=node_config.receive_port,
+            status_provider=node.control_status,
+            command_handler=node.handle_control_command,
+            port=node_config.control_port,
+        )
+    )
+    return node

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from core.node.events import NodeEvent
 from core.node.state import CapabilitySet, NodeSnapshot
+
+if TYPE_CHECKING:
+    from control_plane.registry import NodeRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +27,8 @@ class NodeIdentity:
     device_name: str
     local_address: str
     protocol_version: int
+    node_id: str
+    control_port: int = 55050
 
 
 NodeListener = Callable[[NodeEvent], None]
@@ -71,3 +77,14 @@ class INode(ABC):
     @abstractmethod
     def shutdown(self) -> None:
         """Request graceful shutdown of every active capability."""
+
+    @property
+    @abstractmethod
+    def known_nodes(self) -> tuple[NodeRecord, ...]:
+        """Control-plane snapshot of discovered peer records."""
+
+    @abstractmethod
+    def start_stream(self, sender_node_id: int, receiver_node_id: int) -> None: ...
+
+    @abstractmethod
+    def stop_stream(self, sender_node_id: int, receiver_node_id: int) -> None: ...

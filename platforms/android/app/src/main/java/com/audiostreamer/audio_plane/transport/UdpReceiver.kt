@@ -210,11 +210,10 @@ class UdpReceiver(
         runCatching { callback(diagnostics) }
     }
 
-    /** Close the socket first so a blocking receive wakes immediately, then cancel the job. */
+    /** Request cancellation; socket closure and cleanup happen in the IO receive coroutine. */
     @Synchronized
     fun stop(): Job? {
         val job = receiveJob ?: return null
-        socket?.close()
         job.cancel()
         return job
     }

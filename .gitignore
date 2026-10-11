@@ -18,17 +18,38 @@ build/
 dist/
 *.egg-info/
 
-# Runtime configuration secrets and local overrides
+# Runtime configuration, secrets, and local overrides
 .env
 .env.*
 !.env.example
 config/*.local.toml
+# Runtime Windows node configuration and local credentials.
+/config/config.toml
+**/WifiSettings.h
+.pio/
+secrets/
+*.pem
+*.key
+*.crt
+*.cer
+*.der
+*.p12
+*.pfx
+*.jks
+*.keystore
 
 # Runtime output
 logs/
 recordings/
 *.log
 *.log.*
+*.tmp
+*.temp
+*.bak
+*.orig
+*.swp
+*.swo
+~$*
 
 # Android / Gradle generated files (source Gradle configuration stays tracked)
 .gradle/
@@ -36,21 +57,26 @@ recordings/
 **/.cxx/
 **/.externalNativeBuild/
 local.properties
+captures/
 
 # IDE and editor state
-.idea/caches/
-.idea/shelf/
-.idea/workspace.xml
-.idea/deviceManager.xml
-**/.idea/caches/
-**/.idea/shelf/
-**/.idea/workspace.xml
-**/.idea/deviceManager.xml
+.idea/
 .vscode/
+.vs/
+.history/
 
 # Operating system metadata
 .DS_Store
 Thumbs.db
 Desktop.ini
 
+# Native build and packaging outputs
+*.obj
+*.pdb
+*.ilk
+*.exe
+*.elf
+*.bin
+
+# Platform-specific local build cache
 platforms/android/.gradle-user/

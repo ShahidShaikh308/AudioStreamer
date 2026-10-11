@@ -1,89 +1,61 @@
 # AudioStreamer Architecture
 
-## Design model
+AudioStreamer is a distributed LAN audio project. A device is a node whose available capabilities determine whether it can capture, send, receive, or play audio. The system does not assign permanent server/client roles.
 
-AudioStreamer is a distributed audio transport platform. A participating device is a **node** with a set of capabilities: capture, send, receive, and/or play. Those capabilities may be assigned runtime roles; the architecture does not make any device a permanent server or client.
-
-The system has two independent planes:
+## Independent planes
 
 ### Audio Plane
 
-The Audio Plane transports PCM and performs no orchestration. It includes capture adapters, shared PCM models, the wire protocol, packetization, UDP transport, receive parsing, buffering, and playback. It must not import Control Plane, UI, device discovery, or routing code.
-
-Current path:
+The Audio Plane transports PCM and performs no orchestration. It contains capture adapters, the protocol v3 packet model/serializer/parser, UDP transport, bounded buffering, and platform playback.
 
 ```text
-Windows Audio Engine
-  → WASAPI loopback adapter
-  → PcmFormat / PcmChunk
-  → protocol v3 serialization and frame-aligned packetization
-  → UDP sender
-
-UDP receiver → protocol v3 parser → bounded packet queue → platform playback
-                                                        ├─ Windows PortAudio
-                                                        └─ Android AudioTrack
+Windows WASAPI capture ─┐                       ┌─ Windows UDP receive → bounded queue → PortAudio
+                        ├→ protocol v3 → UDP ───┤
+Android playback capture┘                       └─ Android UDP receive → bounded queue → AudioTrack
 ```
 
-Python protocol serialization/deserialization lives in `audio_plane/protocol/`. `audio_plane/transport/udp_sender.py` accepts PCM model values and sends serialized datagrams; `udp_receiver.py` validates incoming datagrams and emits typed packets through a callback. Neither transport owns application lifecycle or device APIs. `audio_plane/buffering/packet_queue.py` bounds playout delay. Windows capture and playback adapters own their respective device APIs. Android has corresponding protocol, transport, buffering, and playback boundaries.
+Shared Python PCM/network components are under `audio_plane/`. Platform implementations are isolated under `platforms/windows/` and `platforms/android/`. The protocol contract is [PROTOCOL.md](PROTOCOL.md). Audio UDP is best effort and currently has no compression, encryption, retransmission, or clock synchronization.
 
 ### Control Plane
 
-The Control Plane is responsible for orchestration: discovery, registration, heartbeat, routing, destination selection, and connection management. It may issue commands such as `CONNECT`, `STOP`, `DISCONNECT`, and `STATUS`; it never transports PCM payloads.
+The Control Plane handles discovery, registration, heartbeat, node status, and existing START/STOP stream requests. It never carries PCM. Its independent v1 wire contract is [CONTROL_PROTOCOL.md](CONTROL_PROTOCOL.md).
 
-No Control Plane runtime is implemented yet. The `control_plane/` directory documents the reserved boundary only. Today, a Windows user statically enters one peer destination IPv4 address/port and a local receive port in the desktop UI/configuration. That is application configuration, not discovery or dynamic routing.
+On Windows, `control_plane/broker.py` is the sole owner of the configured UDP Control Plane socket. Local Windows node and Device Manager clients attach through an authenticated named pipe; each retains its own node identity and registry. The broker binds without address reuse. `control_plane/manager.py` owns per-client control policy, `registry.py` owns peer snapshots, `protocol/` owns the Python v1 representation, and `transport.py` connects the clients to the broker.
 
-When implemented, control commands must cross the boundary through a small command/status interface. Audio modules must remain functional without a Control Plane process. Control code may request audio lifecycle changes, but must not inspect, packetize, or relay PCM.
+Android implements the same v1 messages in `platforms/android/app/src/main/java/com/audiostreamer/control_plane/`. One `Dispatchers.IO` coroutine owns its UDP socket and performs all control send/receive work. A bounded channel receives outbound messages from the node/UI boundary. The Kotlin codec and registry have no Activity dependency.
 
-## Repository map
+The ESP32 is a control-only hardware client. Its FreeRTOS worker owns UDP discovery, heartbeats, peer maintenance, and queued stream commands. The OLED/joystick UI does not transport audio and does not own network operations.
 
-```text
-audio_plane/
-  models.py                    Shared PCM format/chunk value types
-  buffering/                   Duration-bounded packet playout queue
-  protocol/                    Active protocol v3 constants, packet, parser, serializer
-  transport/                   UDP sender and protocol-validating receiver
-core/
-  audio/interfaces.py          Platform-neutral audio component contracts
-  node/                        INode, capabilities, typed events, lifecycle state
-control_plane/
-  README.md                    Planned scope and dependency boundary
-platforms/
-  windows/
-    capture/                   WASAPI loopback adapter
-    playback/                  Default Windows output through PortAudio
-    desktop/                   Configuration, logging, Tk UI, WindowsNode/composition root
-    requirements.txt            Windows Python runtime dependency
-  android/
-    app/src/main/java/.../
-      audio_plane/              Android protocol, UDP, buffer, playback modules
-      platform/android/          Android application UI and lifecycle
-config/                         User-editable Windows settings
-PROTOCOL.md                     Normative v3 packet specification
-```
+## Node and UI boundaries
 
-## Dependency direction
+`core/audio/interfaces.py` defines platform-neutral audio component contracts. `core/node/` defines the Windows node lifecycle, settings, identity, immutable snapshots, and typed events. The Windows composition root injects WASAPI capture, protocol v3 UDP send/receive, a duration-bounded queue, and PortAudio playback into `WindowsAudioNode`. Sender and receiver lanes run independently.
 
-Platform adapters depend on Audio Plane abstractions. Protocol and transport do not depend on a platform capture API or user interface. The Windows node composes capture plus sender and independently composes UDP receiver, queue, and playback. The Android application composes UDP receive, parsing, queueing, and playback.
+Android has a native Kotlin node contract. `AndroidNode` owns settings and lane lifecycles, while `MainActivity` observes a `StateFlow` and issues node operations. Android mixed playback capture requires API 29+, user consent, and eligible source-app capture policy. The capture callback's reusable PCM memory is copied into a bounded reusable frame pool before asynchronous network transmission.
 
-The intended dependency shape is:
+The Windows Device Manager is a control-only desktop UI. The ESP32 is a hardware control-only client. Both use the same existing Control Protocol semantics, but neither owns or implements Audio Plane functionality.
+
+## Repository layout
 
 ```text
-Platform application → platform adapters → Audio Plane contracts
-Control Plane         → command/status boundary → platform application
-Audio Plane           ✕ no dependency on Control Plane
+audio_plane/                  Shared PCM protocol v3, UDP, and buffering
+control_plane/                Python Control Protocol v1 and Windows broker
+control_client/               Standalone Windows Device Manager
+core/                         Platform-neutral Python component/node contracts
+platforms/windows/            WASAPI capture, playback, node composition, desktop UI
+platforms/android/            Kotlin node, audio/control protocols, Android adapters/UI
+esp32_controller/              Single active ESP32 PlatformIO project
+config/                        Safe example; local runtime overrides are ignored
+docs/                          Supporting architecture notes
+PROTOCOL.md                    Normative Audio Protocol v3
+CONTROL_PROTOCOL.md            Normative Control Protocol v1
 ```
 
-The platform-neutral node API is defined under `core/node/`; audio engine contracts are in `core/audio/interfaces.py`. The Windows composition root injects the existing capture, transport, queue, and playback implementations into `WindowsAudioNode`. The desktop UI depends only on `INode`, settings values, and typed node events. See [docs/NODE_ARCHITECTURE.md](docs/NODE_ARCHITECTURE.md) for event delivery, lifecycle states, and extension rules.
+See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for folder detail and [BUILDING.md](BUILDING.md) for commands.
 
-## Current runtime characteristics
+## Constraints and validation
 
-- Windows capture uses the selected default WASAPI loopback endpoint's mix rate and channel layout; the active sender requires stereo float32.
-- Windows playback uses the default PortAudio output and configures its stream to the incoming packet sample rate.
-- Windows sender and receiver run independently and may be active simultaneously.
-- UDP carries protocol v3 audio datagrams to a configured destination and receive port.
-- Protocol details, limits, and validation are specified in [PROTOCOL.md](PROTOCOL.md).
-- Receivers accept stereo IEEE-754 float32 little-endian PCM. Android writes through `AudioTrack`; Windows writes through PortAudio.
-- Software queues are bounded by audio duration and a hard packet-count ceiling (Windows target: 80 ms).
-- UDP is best effort. There is no acknowledgement, retransmission, clock synchronization, congestion control, encryption, compression, or discovery.
-
-These characteristics describe the current code, not requirements for every future node. New platform capabilities should be isolated behind platform-specific adapters without changing protocol v3 semantics.
+- Audio and Control protocols are independently versioned.
+- Control commands are best-effort requests, not proof that playback started.
+- ESP32 has no audio capability bits and no PCM code.
+- A compile confirms source/build consistency only. LAN discovery, Android permission behavior, hardware input, real-time scheduling, and audible output require physical-device validation.
+- Control Protocol v1 is IPv4 and unauthenticated on the LAN. Use a trusted network.

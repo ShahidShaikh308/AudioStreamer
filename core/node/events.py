@@ -21,6 +21,7 @@ class EventKind(str, Enum):
     FORMAT_CHANGED = "format_changed"
     ERROR = "error"
     SHUTDOWN_COMPLETE = "shutdown_complete"
+    CONTROL_TOPOLOGY = "control_topology"
 
 
 @dataclass(frozen=True, slots=True)

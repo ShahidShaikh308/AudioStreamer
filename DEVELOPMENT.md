@@ -1,55 +1,60 @@
 # Development Guide
 
-## Environment
+## Environments
 
-### Windows Python application
+### Windows
 
-- Windows 10/11, Python 3.13 (64-bit), and Tkinter.
-- Dependencies are pinned in `platforms/windows/requirements.txt`.
-- `AudioStreamer.bat` is the supported user launcher. It creates the root `.venv`, installs dependencies, and starts `main.py`.
+Use 64-bit Python 3.13 with Tkinter. Dependencies are pinned in `platforms/windows/requirements.txt`. `AudioStreamer.bat` prepares the root `.venv` and launches the audio node. `AudioStreamerDeviceManager.bat` launches the standalone control client after the environment has been prepared. The Windows composition root is `platforms/windows/desktop/bootstrap.py`; the UI depends on the node contract rather than capture or socket internals.
 
-For development, create/use the same virtual environment and install the pinned requirements. Run the desktop entry point from the repository root with `.venv\\Scripts\\python.exe main.py`. Do not start individual capture or networking modules as application entry points; `platforms/windows/desktop/bootstrap.py` composes platform implementations and `platforms/windows/desktop/node.py` owns independent sender and receiver lifecycles. The GUI depends only on the `INode` API in `core/node/interfaces.py`.
+### Android
 
-### Android application
-
-Open `platforms/android/` in Android Studio, or use its Gradle wrapper:
+Open `platforms/android/` in Android Studio or use the Gradle wrapper from that directory:
 
 ```powershell
-cd platforms/android
 .\gradlew.bat :app:assembleDebug
 ```
 
-The output APK is `platforms/android/app/build/outputs/apk/debug/app-debug.apk`. Keep the established `applicationId` `com.audiostreamer.receiver`; changing it would make Android treat the refactored app as a different installed application. Kotlin source packages may be reorganized independently from that install identity.
+The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. Keep the existing `applicationId` `com.audiostreamer.receiver` to preserve install identity. See [BUILDING.md](BUILDING.md) for SDK/JDK requirements.
 
-## Validate changes
+### ESP32
 
-There is no single device-independent command that proves end-to-end audio quality. For source-level work:
+Open `esp32_controller/` as a PlatformIO project. Copy the ignored Wi-Fi settings template to `include/audiostreamer/config/WifiSettings.h` and set local credentials. Do not commit the local file.
 
-1. Review `git diff --check` for whitespace or patch errors.
-2. Compile Python modules with the project interpreter and import the Windows entry point.
-3. Build Android with `:app:assembleDebug`.
-4. For runtime changes, capture and play a real signal on Windows and Android hardware; check both application diagnostics and logs. A localhost synthetic-PCM check validates packet delivery and playback setup but does not replace a system-audio capture or Wi-Fi test.
+## Validation
 
-Do not claim successful real-time playback from a compile-only result. Device routing, Windows endpoint formats, Wi-Fi loss, phone audio policy, and scheduling affect runtime behavior.
+Use the commands in [BUILDING.md](BUILDING.md). Python syntax/import validation and Android/ESP32 compilation do not prove LAN discovery, capture policy, hardware input, or audible output. Record hardware and cross-device validation separately.
 
-## Coding principles
+## Architecture and coding principles
 
-- Keep Audio Plane modules independent of UI, platform capture/playback APIs, discovery, and routing.
-- Keep platform-specific device access under `platforms/<platform>/`.
-- Keep protocol wire definitions and normative behavior in `PROTOCOL.md`. Never change protocol v3 field order, meaning, sizes, or validation while retaining version 3.
-- Keep serialization/parsing separate from socket lifecycle and application orchestration.
-- Pass typed PCM chunks/formats across module boundaries; do not make the transport depend on a particular capture implementation.
-- Keep the Control Plane command/status-only. It may request lifecycle actions; it must not carry audio samples.
-- Prefer one responsibility per module and explicit resource ownership/cleanup.
-- Keep platform implementations injected at a composition root; user interfaces and future control components depend on node contracts, not concrete engines.
-- Publish node status as immutable events/snapshots. Marshal cross-thread events to UI event loops before updating UI state.
-- Avoid premature abstractions: add extension points when a real second implementation needs them.
-- Preserve existing packet compatibility unless a separately documented protocol version is deliberately adopted.
+- Keep the Audio Plane focused on PCM transport and playback; keep Control Plane logic focused on discovery and commands.
+- Keep Audio Protocol v3 and Control Protocol v1 wire definitions in their normative root documents. Update every implementation together only for an explicitly approved protocol change.
+- Keep serialization separate from socket ownership and keep OS-specific device APIs behind platform adapters.
+- Use bounded queues and explicit ownership for sockets, audio engines, worker threads, and coroutines.
+- Keep UI code on UI threads and move socket/audio work to background workers. Marshal immutable events/snapshots back to the UI.
+- Prefer a small implementation with clear ownership over abstractions that have no second use yet.
 
-## Configuration and logs
+## Runtime data
 
-The Windows application owns `config/config.toml` and `logs/audiostreamer.log`. Keep runtime-generated files out of source control. Android persists its node name, destination IP/port, receive port, and log level in app-private `SharedPreferences`; configure peer destination ports to match the receiving node's configured receive port.
+Windows creates `config/config.local.toml` on first launch, using the defaults represented by `config/config.example.toml`. It stores a persistent random nonzero 64-bit Node ID and the Control Plane port (default `55050`). Android stores its equivalent in app-private `SharedPreferences`. The Device Manager stores local preferences under the user's application data directory. ESP32 Wi-Fi credentials stay in its ignored `WifiSettings.h`. Logs, runtime config, credentials, and keys must not be published.
 
-## Change workflow
+## Control Plane ownership
 
-Before editing, identify the owning plane and platform. Update the protocol specification and both implementations together only when wire behavior intentionally changes. For architecture-only changes, verify imports and build paths and state clearly which runtime checks were or were not performed.
+On Windows, `control_plane/broker.py` owns the sole Control Plane UDP socket. Local Windows managers exchange datagrams with the broker over an authenticated named pipe. The broker binds without UDP address reuse so a second owner cannot silently share the port. Android's `ControlManager` owns its socket in a private `Dispatchers.IO` coroutine and queues outbound packets through a bounded channel. The ESP32 transport and its background FreeRTOS worker own its socket. Do not add socket operations to an Activity or Tk callback.
+
+Android's node constructs the Audio Plane `UdpSender` on IO and hands PCM from the MediaProjection callback to a bounded queue; the worker copies the callback-owned bytes and sends them from IO. The MediaProjection prompt and foreground-service lifecycle stay on Main because Android requires them there. Closing the Android Control Manager queues GOODBYE and returns; its IO worker drains queued messages and closes the socket.
+
+## Protocol and extension workflow
+
+For a new Control Protocol message or field, document its exact bytes, validation, compatibility behavior, and version implications in [CONTROL_PROTOCOL.md](CONTROL_PROTOCOL.md), then update Python, Kotlin, and firmware implementations in the same change. Keep Control messages free of PCM. For Audio Protocol changes, follow [PROTOCOL.md](PROTOCOL.md) and update all audio parsers/serializers together. Add cross-language byte fixtures before claiming interoperability.
+
+## Adding a platform or UI screen
+
+First decide whether it is an audio-capable node or a control-only client. Put platform APIs under `platforms/<platform>/` or the standalone `esp32_controller/` project, and wire them at the platform composition root. UI screens should render and translate input to typed operations; they must not open sockets, access audio devices, or own peer registries. On ESP32, preserve the background control worker and bounded screen data.
+
+## Review checklist
+
+- Run `git diff --check`.
+- Run Python compile/import checks and the relevant platform build.
+- Review generated outputs and ensure secrets/local settings remain ignored.
+- State whether validation was compile-only, localhost, LAN, or physical-hardware testing.
+- Update README or protocol/architecture docs when behavior, requirements, or limitations change.

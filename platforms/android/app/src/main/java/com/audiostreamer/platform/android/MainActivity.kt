@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,6 +66,8 @@ class MainActivity : ComponentActivity() {
                         node.startReceiver()
                     },
                     onStopReceiver = node::stopReceiver,
+                    onStartStream = node::startStream,
+                    onStopStream = node::stopStream,
                 )
             }
         }
@@ -86,11 +89,14 @@ private fun NodeScreen(
     onStopSender: () -> Unit,
     onStartReceiver: (NodeSettings) -> Unit,
     onStopReceiver: () -> Unit,
+    onStartStream: (Long, Long) -> Unit,
+    onStopStream: (Long, Long) -> Unit,
 ) {
     var nodeName by remember(settings.nodeName) { mutableStateOf(settings.nodeName) }
     var destinationIp by remember(settings.destinationIp) { mutableStateOf(settings.destinationIp) }
     var destinationPort by remember(settings.destinationPort) { mutableStateOf(settings.destinationPort.toString()) }
     var receivePort by remember(settings.receivePort) { mutableStateOf(settings.receivePort.toString()) }
+    var controlPort by remember(settings.controlPort) { mutableStateOf(settings.controlPort.toString()) }
     var logLevel by remember(settings.logLevel) { mutableStateOf(settings.logLevel) }
     var formError by remember { mutableStateOf<String?>(null) }
 
@@ -101,9 +107,12 @@ private fun NodeScreen(
             destinationPort = destinationPort.toIntOrNull() ?: 0,
             receivePort = receivePort.toIntOrNull() ?: 0,
             logLevel = logLevel.trim().uppercase(),
+            nodeId = settings.nodeId,
+            controlPort = controlPort.toIntOrNull() ?: 0,
         )
         require(updated.destinationPort in 1..65535) { "Destination port must be 1–65535" }
         require(updated.receivePort in 1..65535) { "Receive port must be 1–65535" }
+        require(updated.controlPort in 49152..65535) { "Control port must be 49152–65535" }
         return updated
     }
 
@@ -119,6 +128,37 @@ private fun NodeScreen(
             Column {
                 Text("AudioStreamer Node", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
                 Text("${state.nodeName} · ${state.localIp}", style = MaterialTheme.typography.bodyMedium)
+                Text("Node ID ${settings.nodeId.toULong().toString(16).padStart(16, '0')} · ${state.controlStatus}", style = MaterialTheme.typography.bodySmall)
+            }
+
+            Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            )) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Known nodes", style = MaterialTheme.typography.titleMedium)
+                    if (state.knownNodes.isEmpty()) {
+                        Text("Discovering nodes on the local network…", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    state.knownNodes.forEach { peer ->
+                        HorizontalDivider()
+                        Text("${peer.name} · ${peer.platform}", style = MaterialTheme.typography.titleSmall)
+                        val capabilities = buildList {
+                            if (peer.capabilities and com.audiostreamer.control_plane.NodeCapability.CAPTURE != 0) add("Capture")
+                            if (peer.capabilities and com.audiostreamer.control_plane.NodeCapability.PLAYBACK != 0) add("Playback")
+                            if (peer.capabilities and com.audiostreamer.control_plane.NodeCapability.SENDER != 0) add("Sender")
+                            if (peer.capabilities and com.audiostreamer.control_plane.NodeCapability.RECEIVER != 0) add("Receiver")
+                        }.joinToString()
+                        Text("${peer.address} · ${peer.status.name} · UDP ${peer.receivePort} · $capabilities", style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { runCatching { onStartStream(settings.nodeId, peer.nodeId) }.onFailure { formError = it.message } }, enabled = canCapture && (peer.capabilities and com.audiostreamer.control_plane.NodeCapability.RECEIVER) != 0, modifier = Modifier.weight(1f)) { Text("Send to node") }
+                            Button(onClick = { runCatching { onStartStream(peer.nodeId, settings.nodeId) }.onFailure { formError = it.message } }, enabled = (peer.capabilities and com.audiostreamer.control_plane.NodeCapability.SENDER) != 0, modifier = Modifier.weight(1f)) { Text("Receive from") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { runCatching { onStopStream(settings.nodeId, peer.nodeId) }.onFailure { formError = it.message } }, modifier = Modifier.weight(1f)) { Text("Stop send") }
+                            Button(onClick = { runCatching { onStopStream(peer.nodeId, settings.nodeId) }.onFailure { formError = it.message } }, modifier = Modifier.weight(1f)) { Text("Stop receive") }
+                        }
+                    }
+                }
             }
 
             Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(
@@ -133,6 +173,7 @@ private fun NodeScreen(
                         OutlinedTextField(receivePort, { receivePort = it }, label = { Text("Receive port") }, singleLine = true, modifier = Modifier.weight(1f))
                     }
                     OutlinedTextField(logLevel, { logLevel = it }, label = { Text("Log level") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(controlPort, { controlPort = it }, label = { Text("Control port") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     Button(onClick = {
                         runCatching { currentSettings().also(onSaveSettings) }

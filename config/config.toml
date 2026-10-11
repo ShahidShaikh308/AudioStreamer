@@ -1,9 +1,0 @@
-# AudioStreamer Windows node settings.
-device_name = "AudioStreamer Windows Node"
-receiver_ip = "192.168.43.144"
-receiver_port = 5005
-receive_port = 5006
-audio_device_index = -1
-capture_queue_chunks = 8
-frames_per_buffer = 480
-log_level = "INFO"

@@ -1,10 +1,12 @@
 package com.audiostreamer.platform.android.capture
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -17,6 +19,7 @@ import android.os.IBinder
 import android.os.Process
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.annotation.RequiresApi
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Foreground owner for Android's user-authorized mixed-playback capture session. */
@@ -95,15 +98,24 @@ internal class PlaybackCaptureService : Service() {
         captureCallback = callback
         stopRequested.set(false)
         stopNotified.set(false)
-        val thread = Thread({ captureLoop(activeProjection) }, "AudioStreamerCapture").apply { isDaemon = true }
+        val thread = Thread({
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) captureLoop(activeProjection)
+            else captureCallback?.onError(UnsupportedOperationException(
+                "Mixed playback capture requires Android 10 (API 29) or newer",
+            ))
+        }, "AudioStreamerCapture").apply { isDaemon = true }
         worker = thread
         thread.start()
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun captureLoop(activeProjection: MediaProjection) {
         runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO) }
         var localRecorder: AudioRecord? = null
         try {
+            check(checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                "Microphone permission was revoked before playback capture started"
+            }
             val sampleRate = CAPTURE_SAMPLE_RATE
             val minimumBytes = AudioRecord.getMinBufferSize(
                 sampleRate,

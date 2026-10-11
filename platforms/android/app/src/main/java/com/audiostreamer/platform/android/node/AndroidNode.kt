@@ -1,6 +1,8 @@
 package com.audiostreamer.platform.android.node
 
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import com.audiostreamer.audio_plane.playback.AudioPlayer
 import com.audiostreamer.audio_plane.playback.PlaybackDiagnostics
@@ -13,7 +15,17 @@ import com.audiostreamer.core.node.LaneState
 import com.audiostreamer.core.node.NodeCapabilities
 import com.audiostreamer.core.node.NodeSettings
 import com.audiostreamer.core.node.NodeSnapshot
+import com.audiostreamer.core.node.NodeStatus
 import com.audiostreamer.core.node.aggregateStatus
+import com.audiostreamer.control_plane.ControlManager
+import com.audiostreamer.control_plane.ControlEvent
+import com.audiostreamer.control_plane.ErrorPacket
+import com.audiostreamer.control_plane.NodeCapability
+import com.audiostreamer.control_plane.NodeStatus as ControlNodeStatus
+import com.audiostreamer.control_plane.StartStreamPacket
+import com.audiostreamer.control_plane.StopStreamPacket
+import com.audiostreamer.control_plane.StreamState
+import com.audiostreamer.control_plane.StreamStatusPacket
 import com.audiostreamer.platform.android.capture.AndroidPlaybackCapture
 import com.audiostreamer.platform.android.capture.CaptureCallback
 import java.net.NetworkInterface
@@ -23,12 +35,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 /** Android INode implementation. UI and future control code interact only through this contract. */
 class AndroidNode(activity: ComponentActivity) : INode {
@@ -38,19 +53,37 @@ class AndroidNode(activity: ComponentActivity) : INode {
     private var logger = AndroidNodeLogger(currentSettings.logLevel)
     private val capture = AndroidPlaybackCapture(activity)
     private val localNetworkPermission = LocalNetworkPermission(activity)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val nodeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutableState = MutableStateFlow(
         NodeSnapshot(
             nodeName = currentSettings.nodeName,
-            localIp = findLocalIp(),
+            localIp = "Detecting network…",
+            controlStatus = "Waiting for local-network permission",
         ),
     )
-    private var sender: UdpSender? = null
+    private val controlManager = ControlManager(
+        nodeId = currentSettings.nodeId,
+        nodeName = { settings.nodeName },
+        platform = "Android",
+        capabilities = ::controlCapabilities,
+        receivePort = { settings.receivePort },
+        controlPort = { settings.controlPort },
+        statusProvider = ::controlStatus,
+        commandHandler = ::dispatchControlCommand,
+        onEvent = ::onControlEvent,
+    )
+    private var controlPermissionDenied = false
+    private var sender: AndroidAudioSender? = null
+    private var senderSetupJob: Job? = null
+    private var senderCleanupJob: Job? = null
     private var receiver: UdpReceiver? = null
     private var receiverJob: Job? = null
     private var player: AudioPlayer? = null
     private var receiverCleanupJob: Job? = null
     private var captureRequested = false
+    @Volatile private var activeStreamPair: Pair<Long, Long>? = null
+    @Volatile private var activeTransactionId: Int? = null
     private var lastSenderDiagnosticsAt = 0L
     private var shutdownRequested = false
 
@@ -65,20 +98,37 @@ class AndroidNode(activity: ComponentActivity) : INode {
         get() = synchronized(lock) { currentSettings }
 
     init {
+        nodeScope.launch {
+            val localIp = findLocalIp()
+            setState { it.copy(localIp = localIp) }
+        }
         if (!capabilities.canCapture) {
             mutableState.value = mutableState.value.copy(captureStatus = "Requires Android 10 or newer")
         }
         logger.info("node_started name=${currentSettings.nodeName} localIp=${mutableState.value.localIp} protocol=v3")
+        localNetworkPermission.runWhenAllowed(
+            action = {
+                runCatching { controlManager.start() }
+                    .onSuccess { setState { it.copy(controlStatus = "Discovering peers") } }
+                    .onFailure { logger.error("control_start_failed", it); setState { it.copy(controlStatus = "Control Plane error") } }
+            },
+            onDenied = {
+                controlPermissionDenied = true
+                setState { it.copy(controlStatus = "Local-network permission denied") }
+            },
+        )
     }
 
     override fun updateSettings(settings: NodeSettings) {
         validateSettings(settings)
         synchronized(lock) {
             check(!shutdownRequested) { "Node is shutting down" }
+            require(settings.nodeId == currentSettings.nodeId) { "Node ID is permanent and cannot be changed" }
             currentSettings = settings.copy(logLevel = settings.logLevel.uppercase())
             logger = AndroidNodeLogger(currentSettings.logLevel)
             mutableState.value = mutableState.value.copy(nodeName = currentSettings.nodeName)
         }
+        controlManager.updateLocal()
     }
 
     override fun saveConfiguration() {
@@ -92,7 +142,7 @@ class AndroidNode(activity: ComponentActivity) : INode {
 
     override fun startSender() {
         synchronized(lock) {
-            if (shutdownRequested || captureRequested ||
+            if (shutdownRequested || captureRequested || senderCleanupJob?.isActive == true ||
                 senderLane() in setOf(LaneState.STARTING, LaneState.RUNNING, LaneState.STOPPING)
             ) return
             setSenderLaneLocked(LaneState.STARTING)
@@ -107,17 +157,46 @@ class AndroidNode(activity: ComponentActivity) : INode {
         }
         localNetworkPermission.runWhenAllowed(
             action = {
-                val config = settings
-                try {
-                    synchronized(lock) {
-                        if (shutdownRequested || senderLane() != LaneState.STARTING) return@runWhenAllowed
-                        sender = UdpSender(config.destinationIp, config.destinationPort)
-                        captureRequested = true
-                    }
-                    capture.start(senderCaptureCallback)
-                } catch (error: Exception) {
-                    senderFailure(error)
+                synchronized(lock) {
+                    if (shutdownRequested || senderLane() != LaneState.STARTING) return@runWhenAllowed
                 }
+                val config = settings
+                val setup = nodeScope.launch(start = CoroutineStart.LAZY) {
+                    var candidate: AndroidAudioSender? = null
+                    try {
+                        candidate = withContext(NonCancellable + Dispatchers.IO) {
+                            AndroidAudioSender(
+                                UdpSender(config.destinationIp, config.destinationPort),
+                            ) { error -> mainHandler.post { senderFailure(error) } }
+                        }
+                        withContext(Dispatchers.Main.immediate) {
+                            val install = synchronized(lock) {
+                                if (shutdownRequested || senderLane() != LaneState.STARTING) false
+                                else {
+                                    sender = candidate
+                                    candidate = null
+                                    captureRequested = true
+                                    true
+                                }
+                            }
+                            if (install) capture.start(senderCaptureCallback)
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        withContext(Dispatchers.Main.immediate) { senderFailure(error) }
+                    } finally {
+                        candidate?.let { active ->
+                            withContext(NonCancellable + Dispatchers.IO) { active.closeAndJoin() }
+                        }
+                        synchronized(lock) {
+                            if (senderSetupJob === coroutineContext[Job]) senderSetupJob = null
+                        }
+                        maybeFinishShutdown()
+                    }
+                }
+                synchronized(lock) { senderSetupJob = setup }
+                setup.start()
             },
             onDenied = {
                 if (senderLane() == LaneState.STARTING) {
@@ -133,8 +212,11 @@ class AndroidNode(activity: ComponentActivity) : INode {
             val lane = senderLane()
             if (lane == LaneState.STOPPED) return
             if (lane == LaneState.STARTING && !captureRequested) {
-                sender?.close()
+                senderSetupJob?.cancel()
+                senderSetupJob = null
+                val abandonedSender = sender
                 sender = null
+                closeSenderAsync(abandonedSender)
                 setSenderLaneLocked(LaneState.STOPPED)
                 setStateLocked { it.copy(captureStatus = "Stopped") }
                 maybeFinishShutdown()
@@ -146,11 +228,13 @@ class AndroidNode(activity: ComponentActivity) : INode {
         if (stopCapture) {
             capture.stop()
         } else {
+            val abandonedSender: AndroidAudioSender?
             synchronized(lock) {
-                sender?.close()
+                abandonedSender = sender
                 sender = null
                 setSenderLaneLocked(LaneState.STOPPED)
             }
+            closeSenderAsync(abandonedSender)
             maybeFinishShutdown()
         }
     }
@@ -256,9 +340,18 @@ class AndroidNode(activity: ComponentActivity) : INode {
         }
     }
 
+    override fun startStream(senderNodeId: Long, receiverNodeId: Long) {
+        controlManager.sendStartStream(senderNodeId, receiverNodeId)
+    }
+
+    override fun stopStream(senderNodeId: Long, receiverNodeId: Long) {
+        controlManager.sendStopStream(senderNodeId, receiverNodeId)
+    }
+
     override fun shutdown() {
         synchronized(lock) { shutdownRequested = true }
         logger.info("node_shutdown_requested")
+        controlManager.close()
         stopSender()
         stopReceiver()
         maybeFinishShutdown()
@@ -277,35 +370,42 @@ class AndroidNode(activity: ComponentActivity) : INode {
 
         override fun onPcm(payload: ByteArray, length: Int, sampleRate: Int, channels: Int) {
             try {
-                sender?.sendPcm(payload, length, sampleRate, channels)
+                val activeSender = synchronized(lock) { sender } ?: return
+                activeSender.enqueuePcm(payload, length, sampleRate, channels)
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastSenderDiagnosticsAt >= SENDER_STATS_INTERVAL_MS) {
                     lastSenderDiagnosticsAt = now
-                    sender?.let { active ->
-                        setState { it.copy(senderDiagnostics = active.diagnostics(sampleRate), sampleRate = sampleRate) }
+                    synchronized(lock) {
+                        if (sender === activeSender) {
+                            setStateLocked {
+                                it.copy(senderDiagnostics = activeSender.diagnostics(sampleRate), sampleRate = sampleRate)
+                            }
+                        }
                     }
                 }
             } catch (error: Exception) {
                 logger.warning("sender_network_error", error)
                 setError(error)
-                senderFailure(error)
+                mainHandler.post { senderFailure(error) }
             }
         }
 
         override fun onStopped() {
+            val stoppedSender: AndroidAudioSender?
             synchronized(lock) {
                 captureRequested = false
-                sender?.close()
+                stoppedSender = sender
                 sender = null
                 if (senderLane() != LaneState.ERROR) setSenderLaneLocked(LaneState.STOPPED)
                 setStateLocked { it.copy(captureStatus = "Stopped") }
             }
             logger.info("capture_stopped")
             logger.info("sender_stopped")
+            closeSenderAsync(stoppedSender)
             maybeFinishShutdown()
         }
 
-        override fun onError(error: Throwable) = senderFailure(error)
+        override fun onError(error: Throwable) { mainHandler.post { senderFailure(error) } }
     }
 
     private fun onReceiverDiagnostics(diagnostics: NetworkDiagnostics) {
@@ -335,14 +435,39 @@ class AndroidNode(activity: ComponentActivity) : INode {
 
     private fun senderFailure(error: Throwable) {
         logger.error("sender_or_capture_error", error)
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { senderFailure(error) }
+            return
+        }
+        val failedSender: AndroidAudioSender?
         synchronized(lock) {
             if (senderLane() in setOf(LaneState.STOPPED, LaneState.STOPPING)) return
-            sender?.close()
+            failedSender = sender
             sender = null
             setSenderLaneLocked(LaneState.ERROR)
             setStateLocked { it.copy(captureStatus = "Error", error = error.message ?: error.javaClass.simpleName) }
         }
+        closeSenderAsync(failedSender)
         capture.stop()
+    }
+
+    private fun closeSenderAsync(activeSender: AndroidAudioSender?) {
+        if (activeSender == null) return
+        synchronized(lock) {
+            if (senderCleanupJob?.isActive == true) return
+            val cleanup = nodeScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                try {
+                    activeSender.closeAndJoin()
+                } catch (error: Exception) {
+                    logger.error("sender_cleanup_error", error)
+                } finally {
+                    synchronized(lock) { senderCleanupJob = null }
+                    maybeFinishShutdown()
+                }
+            }
+            senderCleanupJob = cleanup
+            cleanup.start()
+        }
     }
 
     private fun receiverFailure(error: Throwable) {
@@ -361,16 +486,136 @@ class AndroidNode(activity: ComponentActivity) : INode {
         }
     }
 
+    private fun dispatchControlCommand(packet: com.audiostreamer.control_plane.ControlPacket) {
+        mainHandler.post {
+            runCatching { handleControlCommand(packet) }
+                .onFailure { error ->
+                    logger.error("control_command_failed", error)
+                    setError(error)
+                    val pair = activeStreamPair
+                    val transactionId = activeTransactionId
+                    if (pair != null && transactionId != null) {
+                        controlManager.reportError(currentSettings.nodeId, 1,
+                            error.message ?: "command failed", transactionId, pair.first, pair.second)
+                    }
+                }
+        }
+    }
+
+    private fun handleControlCommand(packet: com.audiostreamer.control_plane.ControlPacket) {
+        if (shutdownRequested) return
+        val senderId: Long
+        val receiverId: Long
+        when (packet) {
+            is StartStreamPacket -> { senderId = packet.senderNodeId; receiverId = packet.receiverNodeId }
+            is StopStreamPacket -> { senderId = packet.senderNodeId; receiverId = packet.receiverNodeId }
+            else -> return
+        }
+        if (currentSettings.nodeId != senderId && currentSettings.nodeId != receiverId) return
+        activeStreamPair = senderId to receiverId
+        activeTransactionId = when (packet) {
+            is StartStreamPacket -> packet.transactionId
+            is StopStreamPacket -> packet.transactionId
+            else -> null
+        }
+        if (packet is StartStreamPacket) {
+            if (currentSettings.nodeId == senderId) {
+                check(capabilities.canCapture) { "This Android version cannot capture mixed playback" }
+                val peer = controlManager.registry.get(receiverId) ?: error("Receiver node is no longer online")
+                check((peer.capabilities and NodeCapability.RECEIVER) != 0) { "Selected node does not advertise receiver capability" }
+                updateSettings(settings.copy(destinationIp = peer.address, destinationPort = peer.receivePort))
+                startSender()
+            }
+            if (currentSettings.nodeId == receiverId) {
+                val peer = controlManager.registry.get(senderId)
+                check(peer == null || (peer.capabilities and NodeCapability.SENDER) != 0) {
+                    "Selected node does not advertise sender capability"
+                }
+                startReceiver()
+            }
+        } else if (packet is StopStreamPacket) {
+            if (currentSettings.nodeId == senderId) stopSender()
+            if (currentSettings.nodeId == receiverId) stopReceiver()
+        }
+        val lane = if (currentSettings.nodeId == senderId) senderLane() else receiverLane()
+        val streamState = when {
+            lane == LaneState.RUNNING -> StreamState.RUNNING
+            lane == LaneState.STOPPED && packet is StopStreamPacket -> StreamState.STOPPED
+            else -> null
+        }
+        streamState?.let { state -> controlManager.reportStreamStatus(senderId, receiverId,
+            state, transactionId = activeTransactionId) }
+    }
+
+    private fun onControlEvent(event: ControlEvent) {
+        when (event) {
+            is ControlEvent.NodeDiscovered -> logger.info("node_discovered id=${event.node.nodeId} name=${event.node.name} ip=${event.node.address}")
+            is ControlEvent.NodeLost -> logger.info("node_lost id=${event.node.nodeId} name=${event.node.name}")
+            is ControlEvent.Error -> logger.warning("control_error ${event.message}")
+            is ControlEvent.Stream -> when (val packet = event.packet) {
+                is StreamStatusPacket -> logger.info("stream_status sender=${packet.senderNodeId} receiver=${packet.receiverNodeId} state=${packet.state} code=${packet.errorCode}")
+                is ErrorPacket -> logger.error("peer_error nodeId=${packet.nodeId} code=${packet.errorCode} message=${packet.message}")
+                else -> Unit
+            }
+            else -> Unit
+        }
+        setState { state ->
+            state.copy(
+                knownNodes = controlManager.registry.snapshot(),
+                controlStatus = when {
+                    controlPermissionDenied -> "Local-network permission denied"
+                    controlManager.registry.snapshot().isEmpty() -> "Discovering peers"
+                    else -> "${controlManager.registry.snapshot().size} peer(s) online"
+                },
+            )
+        }
+    }
+
+    private fun controlCapabilities(): Int {
+        var mask = 0
+        if (capabilities.canCapture) mask = mask or NodeCapability.CAPTURE
+        if (capabilities.canPlay) mask = mask or NodeCapability.PLAYBACK
+        if (capabilities.canSend) mask = mask or NodeCapability.SENDER
+        if (capabilities.canReceive) mask = mask or NodeCapability.RECEIVER
+        return mask
+    }
+
+    private fun controlStatus(): ControlNodeStatus {
+        val state = mutableState.value
+        return when {
+            state.status == NodeStatus.ERROR -> ControlNodeStatus.ERROR
+            state.sender in setOf(LaneState.STARTING, LaneState.STOPPING) ||
+                state.receiver in setOf(LaneState.STARTING, LaneState.STOPPING) -> ControlNodeStatus.BUSY
+            state.sender == LaneState.RUNNING || state.receiver == LaneState.RUNNING -> ControlNodeStatus.STREAMING
+            else -> ControlNodeStatus.ONLINE
+        }
+    }
+
     private fun setSenderLaneLocked(state: LaneState) {
         val current = mutableState.value.sender
         validateTransition(current, state)
         setStateLocked { it.copy(sender = state) }
+        reportStreamState(state)
     }
 
     private fun setReceiverLaneLocked(state: LaneState) {
         val current = mutableState.value.receiver
         validateTransition(current, state)
         setStateLocked { it.copy(receiver = state) }
+        reportStreamState(state)
+    }
+
+    private fun reportStreamState(state: LaneState) {
+        val pair = activeStreamPair ?: return
+        val streamState = when (state) {
+            LaneState.RUNNING -> StreamState.RUNNING
+            LaneState.STOPPED -> StreamState.STOPPED
+            LaneState.ERROR -> StreamState.FAILED
+            else -> return
+        }
+        controlManager.reportStreamStatus(pair.first, pair.second, streamState,
+            errorCode = if (state == LaneState.ERROR) 1 else 0,
+            transactionId = activeTransactionId)
     }
 
     private inline fun setStateLocked(transform: (NodeSnapshot) -> NodeSnapshot) {
@@ -387,7 +632,7 @@ class AndroidNode(activity: ComponentActivity) : INode {
 
     private fun maybeFinishShutdown() {
         val complete = synchronized(lock) {
-            shutdownRequested && receiverCleanupJob == null &&
+            shutdownRequested && receiverCleanupJob == null && senderCleanupJob == null && senderSetupJob == null &&
                 senderLane() in setOf(LaneState.STOPPED, LaneState.ERROR) &&
                 receiverLane() in setOf(LaneState.STOPPED, LaneState.ERROR)
         }
@@ -408,10 +653,13 @@ class AndroidNode(activity: ComponentActivity) : INode {
 
     private fun validateSettings(settings: NodeSettings) {
         require(settings.nodeName.isNotBlank() && settings.nodeName.length <= 128) { "Node name is required (max 128 characters)" }
+        require(settings.nodeName.none { it == '\n' || it == '\r' || it == '\u0000' }) { "Node name must be a single line" }
+        require(settings.nodeName.toByteArray(Charsets.UTF_8).size <= 255) { "Node name must fit the 255-byte Control Protocol v1 name limit" }
         require(settings.destinationIp.matches(IPV4_PATTERN)) { "Destination must be an IPv4 address" }
         require(settings.destinationIp.split('.').all { it.toIntOrNull() in 0..255 }) { "Destination IPv4 address is invalid" }
         require(settings.destinationPort in 1..65535) { "Destination port must be 1..65535" }
         require(settings.receivePort in 1..65535) { "Receive port must be 1..65535" }
+        require(settings.controlPort in 49152..65535) { "Control port must be 49152..65535" }
         require(settings.logLevel.uppercase() in LOG_LEVELS) { "Log level must be DEBUG, INFO, WARNING, or ERROR" }
     }
 

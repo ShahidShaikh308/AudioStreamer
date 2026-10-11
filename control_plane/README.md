@@ -1,9 +1,11 @@
-# Control Plane Boundary
+# Control Plane
 
-The Control Plane is a planned, independent orchestration system. This directory intentionally contains no runtime implementation.
+The Control Plane handles identity announcement, discovery, heartbeats, peer expiry, and existing stream lifecycle requests. It is independent of the Audio Plane and never receives PCM. The v1 wire format and validation rules are normative in [`CONTROL_PROTOCOL.md`](../CONTROL_PROTOCOL.md).
 
-Its future responsibilities are device discovery, registration, heartbeat, routing, device selection, and connection management. It may exchange commands and status such as `CONNECT`, `STOP`, `DISCONNECT`, and `STATUS` with node applications.
+Python `protocol/` owns wire types and encoding/parsing. `registry.py` owns peer snapshots and timeout removal. `manager.py` handles discovery and command/status policy. On Windows, `broker.py` owns the single UDP socket and relays datagrams through an authenticated named pipe; `transport.py` is the per-process pipe client. The Windows node and Device Manager reuse this implementation.
 
-The Control Plane must never transport PCM audio. It must not become a dependency of protocol parsing, packetization, UDP audio transport, buffering, or playback. Audio nodes must remain operable with statically configured endpoints when no Control Plane is present.
+Android mirrors v1 in `platforms/android/app/src/main/java/com/audiostreamer/control_plane/`: `ControlProtocol.kt` contains typed packets and codec, `NodeRegistry.kt` owns peer snapshots, and `ControlManager.kt` owns the UDP socket in a private IO coroutine scope with bounded outbound messages.
 
-Before implementing this plane, define the command/status interface and lifecycle ownership separately from the audio wire protocol. Control messages must not alter protocol v3 datagrams.
+ESP32 has a separate C++ v1 implementation under `esp32_controller/`. Its control worker owns networking, while the UI owns presentation and input. All implementations use the same message IDs and field layout.
+
+Control commands are unacknowledged UDP requests. A successful local send does not establish that a peer accepted a command or that audio is audible. IPv4 broadcast may be blocked by firewall, VPN, or Wi-Fi client isolation; validate discovery and stream commands on physical devices.

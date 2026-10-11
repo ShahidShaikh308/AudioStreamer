@@ -31,7 +31,7 @@ flowchart LR
     RECV --> PROTO
 ```
 
-The Control Plane may later use the same node contract to issue lifecycle commands and observe status. It remains outside the Audio Plane and has no access to PCM payloads through this interface.
+The Control Plane has its own versioned binary protocol, registry, and UDP manager. It exposes discovered node records and typed START_STREAM/STOP_STREAM commands to platform nodes. It remains outside the Audio Plane and has no access to PCM payloads through this interface.
 
 ## Lifecycle model
 
@@ -51,7 +51,7 @@ Node listeners receive typed events for state changes, format and statistics upd
 
 ## Current limits
 
-Windows and Android now implement equivalent platform-native node contracts. Discovery, registration, heartbeat, dynamic routing, and Control Plane command delivery are not implemented. Android transport, capture, acoustic behavior, and long-duration stability still require runtime validation on physical devices.
+Windows and Android implement equivalent platform-native audio-node contracts and Control Protocol v1 discovery/command handling. Both platforms use stable random nonzero 64-bit node IDs, configurable UDP control port 55050 by default, periodic HELLO/HEARTBEAT, registry expiration, and immediate GOODBYE handling. The ESP32 is a control-only hardware client, not an audio node; it maintains its own peer view and issues existing start/stop requests. Android Control Plane socket creation, bind, send, receive, broadcast, and cleanup run through a background IO coroutine. The PCM sender copies callback-owned data into a bounded channel and a single IO worker performs UDP sends. Capture permission prompts and UI state remain on the main thread. Physical-device control-plane behavior still requires runtime validation.
 
 ## Android node
 
@@ -62,3 +62,13 @@ Windows and Android now implement equivalent platform-native node contracts. Dis
 Android playback capture exists from Android 10 (API 29). It captures only eligible `USAGE_MEDIA`, `USAGE_GAME`, or `USAGE_UNKNOWN` playback from apps whose capture policy permits it, with user-approved MediaProjection. Audio from protected or opted-out apps cannot be captured. The app requests `RECORD_AUDIO`; it does not use the microphone as an audio source. Android 14/API 34+ requires the media-projection foreground-service declaration and permission. Because the app targets API 37, local UDP send and receive also require the `ACCESS_LOCAL_NETWORK` runtime permission. The receive/playback-only path can run on older supported Android versions; mixed playback sending reports unsupported below API 29.
 
 Android end-to-end transport and physical audio quality require Android devices. A successful Gradle build or serializer inspection does not prove Android-to-Windows, Android-to-Android, or acoustic playback behavior.
+
+## Control Plane
+
+The ESP32 controller is intentionally not an `INode` audio implementation: it has no capture, send-audio, receive-audio, or playback capability. It is a hardware Control Plane client that discovers nodes, maintains its peer view, and issues existing v1 stream commands from its event-driven OLED/joystick UI. Its Control UDP socket and peer maintenance run on a background FreeRTOS task. The module and hardware map is documented in `esp32_controller/README.md`.
+
+Python `control_plane/protocol/` owns the v1 packet model, serializer, parser, and wire constants. On Windows, `broker.py` is the single owner of the configured UDP socket and relays datagrams over an authenticated named pipe; `transport.py` is the local message-bus client. Every local manager retains its own identity, registry, and dispatch policy, while only the broker binds the network port. `manager.py` applies discovery/heartbeat/command policy; `registry.py` stores peer snapshots and expiry. The Windows composition root attaches the manager to `WindowsAudioNode`; node events publish registry snapshots to the GUI.
+
+Android mirrors the v1 wire format in its native Kotlin Control Plane package and owns its registry/UDP manager inside `AndroidNode`. `MainActivity` observes node state and invokes typed stream requests; it does not handle control sockets or packet encoding. Android requests runtime local-network permission on API 37+ before starting discovery. The Kotlin implementation mirrors the wire contract rather than importing Python source.
+
+The six-byte control header is magic `AC`, version, type, and big-endian payload length. Control v1 uses a dedicated port, status/capability enums, UTF-8 name/platform fields, and optional trailing transaction IDs. See [CONTROL_PROTOCOL.md](../CONTROL_PROTOCOL.md) for normative offsets, values, validation, discovery, and extension rules. Control commands are requests, not delivery acknowledgements; Audio Protocol v3 and its packet layout remain unchanged.

@@ -32,15 +32,24 @@ class AudioStreamerWindow:
         self._unsubscribe = self.node.subscribe(self._events.put)
         settings = node.settings
         identity = node.identity
+        self.node_id = identity.node_id
+        self.control_port = identity.control_port
         logger.info(
             "windows_node_startup device=%s local_ip=%s destination=%s:%d receive_port=%d protocol=v%d",
-            identity.device_name, identity.local_address, settings.destination_ip,
-            settings.destination_port, settings.receive_port, identity.protocol_version,
+            identity.device_name,
+            identity.local_address,
+            settings.destination_ip,
+            settings.destination_port,
+            settings.receive_port,
+            identity.protocol_version,
         )
 
         self.device_name = tk.StringVar(value=settings.device_name)
         self.local_ip = tk.StringVar(value=identity.local_address)
-        self.protocol = tk.StringVar(value=f"AudioStreamer v{identity.protocol_version}")
+        self.protocol = tk.StringVar(
+            value=f"AudioStreamer v{identity.protocol_version}"
+        )
+        self.control_status = tk.StringVar(value="Discovering peers")
         self.destination_ip = tk.StringVar(value=settings.destination_ip)
         self.destination_port = tk.StringVar(value=str(settings.destination_port))
         self.receive_port = tk.StringVar(value=str(settings.receive_port))
@@ -56,6 +65,7 @@ class AudioStreamerWindow:
         self.error_status = tk.StringVar(value=self._last_error)
 
         self._build_widgets()
+        self._refresh_known_nodes(node.known_nodes)
         self.root.protocol("WM_DELETE_WINDOW", self._close_window)
         self.root.after(200, self._process_events)
 
@@ -79,6 +89,9 @@ class AudioStreamerWindow:
         ttk.Label(body, text="Local IP").grid(row=2, column=0, sticky="w", pady=3)
         ttk.Label(body, textvariable=self.local_ip).grid(
             row=2, column=1, sticky="w", pady=3
+        )
+        ttk.Label(body, text=f"Node ID {self.node_id}").grid(
+            row=2, column=2, sticky="e", padx=(12, 0), pady=3
         )
 
         settings = ttk.LabelFrame(body, text="Node settings", padding=10)
@@ -188,6 +201,48 @@ class AudioStreamerWindow:
             wraplength=600,
         ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
+        topology = ttk.LabelFrame(body, text="Control Plane · Known nodes", padding=10)
+        topology.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(10, 4))
+        topology.columnconfigure(0, weight=1)
+        ttk.Label(topology, textvariable=self.control_status).grid(
+            row=0, column=0, sticky="w"
+        )
+        self.node_table = ttk.Treeview(
+            topology,
+            columns=("name", "platform", "address", "status", "capabilities"),
+            show="headings",
+            height=4,
+        )
+        for column, title, width in (
+            ("name", "Name", 140),
+            ("platform", "Platform", 80),
+            ("address", "IP · Receive port", 130),
+            ("status", "Status", 85),
+            ("capabilities", "Capabilities", 180),
+        ):
+            self.node_table.heading(column, text=title)
+            self.node_table.column(
+                column, width=width, stretch=column in {"name", "capabilities"}
+            )
+        self.node_table.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(6, 8))
+        stream_controls = ttk.Frame(topology)
+        stream_controls.grid(row=2, column=0, columnspan=3, sticky="ew")
+        ttk.Button(
+            stream_controls,
+            text="Send to selected",
+            command=lambda: self._request_stream(send=True),
+        ).pack(side="left", padx=(0, 6))
+        ttk.Button(
+            stream_controls,
+            text="Receive from selected",
+            command=lambda: self._request_stream(send=False),
+        ).pack(side="left", padx=(0, 6))
+        ttk.Button(
+            stream_controls,
+            text="Stop selected stream",
+            command=self._stop_selected_stream,
+        ).pack(side="left")
+
     def _read_settings(self) -> NodeSettings:
         return NodeSettings(
             device_name=self.device_name.get().strip(),
@@ -258,22 +313,31 @@ class AudioStreamerWindow:
             if event.lane is Lane.SENDER:
                 self.sender_status.set(self._state_label(event.snapshot.sender))
                 self.sender_start_button.configure(
-                    state="normal" if event.snapshot.sender in {LaneState.STOPPED, LaneState.ERROR} else "disabled"
+                    state="normal"
+                    if event.snapshot.sender in {LaneState.STOPPED, LaneState.ERROR}
+                    else "disabled"
                 )
                 self.sender_stop_button.configure(
-                    state="normal" if event.snapshot.sender in {LaneState.STARTING, LaneState.RUNNING} else "disabled"
+                    state="normal"
+                    if event.snapshot.sender in {LaneState.STARTING, LaneState.RUNNING}
+                    else "disabled"
                 )
             elif event.lane is Lane.RECEIVER:
                 state = event.snapshot.receiver
                 self.receiver_status.set(
-                    f"Listening on UDP {event.data}…" if state is LaneState.STARTING and event.data
+                    f"Listening on UDP {event.data}…"
+                    if state is LaneState.STARTING and event.data
                     else self._state_label(state)
                 )
                 self.receiver_start_button.configure(
-                    state="normal" if state in {LaneState.STOPPED, LaneState.ERROR} else "disabled"
+                    state="normal"
+                    if state in {LaneState.STOPPED, LaneState.ERROR}
+                    else "disabled"
                 )
                 self.receiver_stop_button.configure(
-                    state="normal" if state in {LaneState.STARTING, LaneState.RUNNING} else "disabled"
+                    state="normal"
+                    if state in {LaneState.STARTING, LaneState.RUNNING}
+                    else "disabled"
                 )
         elif event.kind is EventKind.FORMAT_CHANGED:
             device, rate, channels = event.data
@@ -286,14 +350,19 @@ class AudioStreamerWindow:
                 (queue_drops, callback_events) != self._last_capture_warning
             ):
                 self._last_capture_warning = (queue_drops, callback_events)
-                logger.warning("capture_diagnostics queue_drops=%d callback_status_events=%d",
-                               queue_drops, callback_events)
+                logger.warning(
+                    "capture_diagnostics queue_drops=%d callback_status_events=%d",
+                    queue_drops,
+                    callback_events,
+                )
         elif event.kind is EventKind.RECEIVER_STATS:
             stats = event.data
             self.packets_received.set(str(stats.packets_received))
             self.bytes_received.set(str(stats.bytes_received))
             if stats.sample_rate:
-                self.sample_format.set(f"{stats.sample_rate} Hz, {stats.channels} channels")
+                self.sample_format.set(
+                    f"{stats.sample_rate} Hz, {stats.channels} channels"
+                )
             self._last_packet_at = stats.last_packet_at
             if stats.packets_received and time.monotonic() - self._last_packet_at < 2.0:
                 self.receiver_status.set("Receiving audio")
@@ -306,6 +375,8 @@ class AudioStreamerWindow:
         elif event.kind is EventKind.QUEUE_STATS:
             buffered_ms, dropped = event.data
             self.queue_status.set(f"{buffered_ms:.1f} ms; {dropped} overflow drops")
+        elif event.kind is EventKind.CONTROL_TOPOLOGY:
+            self._refresh_known_nodes(event.data or ())
         elif event.kind is EventKind.SHUTDOWN_COMPLETE:
             if self._closing:
                 logger.info("windows_node_shutdown_complete")
@@ -313,6 +384,70 @@ class AudioStreamerWindow:
                 self.root.destroy()
                 return True
         return False
+
+    def _refresh_known_nodes(self, nodes) -> None:
+        selected = self.node_table.selection()
+        for item in self.node_table.get_children():
+            self.node_table.delete(item)
+        for node in nodes:
+            capabilities = ", ".join(
+                label
+                for flag, label in (
+                    (1, "Capture"),
+                    (2, "Playback"),
+                    (4, "Sender"),
+                    (8, "Receiver"),
+                )
+                if int(node.capabilities) & flag
+            )
+            self.node_table.insert(
+                "",
+                "end",
+                iid=f"{node.node_id:016x}",
+                values=(
+                    node.name,
+                    node.platform,
+                    f"{node.address} · {node.receive_port}",
+                    node.status.name,
+                    capabilities,
+                ),
+            )
+        if selected and self.node_table.exists(selected[0]):
+            self.node_table.selection_set(selected[0])
+        self.control_status.set(
+            f"{len(nodes)} node(s) online · Control UDP {self.control_port}"
+        )
+
+    def _selected_peer_id(self) -> int | None:
+        selection = self.node_table.selection()
+        return int(selection[0], 16) if selection else None
+
+    def _request_stream(self, *, send: bool) -> None:
+        peer_id = self._selected_peer_id()
+        if peer_id is None:
+            self._set_error("Select a discovered node first")
+            return
+        local_id = int(self.node_id, 16)
+        try:
+            self.node.start_stream(
+                local_id, peer_id
+            ) if send else self.node.start_stream(peer_id, local_id)
+            self._set_error("None")
+        except (OSError, ValueError, RuntimeError, KeyError) as error:
+            self._set_error(str(error))
+
+    def _stop_selected_stream(self) -> None:
+        peer_id = self._selected_peer_id()
+        if peer_id is None:
+            self._set_error("Select a discovered node first")
+            return
+        local_id = int(self.node_id, 16)
+        try:
+            self.node.stop_stream(local_id, peer_id)
+            self.node.stop_stream(peer_id, local_id)
+            self._set_error("None")
+        except (OSError, ValueError, RuntimeError, KeyError) as error:
+            self._set_error(str(error))
 
     @staticmethod
     def _state_label(state: LaneState) -> str:

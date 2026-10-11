@@ -3,6 +3,7 @@ package com.audiostreamer.core.node
 import com.audiostreamer.audio_plane.playback.PlaybackDiagnostics
 import com.audiostreamer.audio_plane.transport.NetworkDiagnostics
 import com.audiostreamer.audio_plane.transport.SenderDiagnostics
+import com.audiostreamer.control_plane.NodeRecord
 import kotlinx.coroutines.flow.StateFlow
 
 enum class LaneState { STOPPED, STARTING, RUNNING, STOPPING, ERROR }
@@ -21,6 +22,8 @@ data class NodeSettings(
     val destinationPort: Int,
     val receivePort: Int,
     val logLevel: String,
+    val nodeId: Long = 0L,
+    val controlPort: Int = 55050,
 )
 
 data class NodeSnapshot(
@@ -36,6 +39,8 @@ data class NodeSnapshot(
     val playbackStatus: String = "Stopped",
     val sampleRate: Int = 0,
     val error: String? = null,
+    val knownNodes: List<NodeRecord> = emptyList(),
+    val controlStatus: String = "Starting discovery",
 )
 
 interface INode {
@@ -49,6 +54,8 @@ interface INode {
     fun stopSender()
     fun startReceiver()
     fun stopReceiver()
+    fun startStream(senderNodeId: Long, receiverNodeId: Long)
+    fun stopStream(senderNodeId: Long, receiverNodeId: Long)
     fun shutdown()
 }
 

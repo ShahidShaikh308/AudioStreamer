@@ -1,0 +1,10 @@
+# Copy to config.local.toml to override defaults. The node ID is generated on first run.
+device_name = "AudioStreamer Windows Node"
+receiver_ip = "127.0.0.1"
+receiver_port = 5005
+receive_port = 5006
+audio_device_index = -1
+capture_queue_chunks = 8
+frames_per_buffer = 480
+log_level = "INFO"
+control_port = 55050
