@@ -377,12 +377,11 @@ class AudioStreamerWindow:
             self.queue_status.set(f"{buffered_ms:.1f} ms; {dropped} overflow drops")
         elif event.kind is EventKind.CONTROL_TOPOLOGY:
             self._refresh_known_nodes(event.data or ())
-        elif event.kind is EventKind.SHUTDOWN_COMPLETE:
-            if self._closing:
-                logger.info("windows_node_shutdown_complete")
-                self._unsubscribe()
-                self.root.destroy()
-                return True
+        elif event.kind is EventKind.SHUTDOWN_COMPLETE and self._closing:
+            logger.info("windows_node_shutdown_complete")
+            self._unsubscribe()
+            self.root.destroy()
+            return True
         return False
 
     def _refresh_known_nodes(self, nodes) -> None:
