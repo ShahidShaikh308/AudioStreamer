@@ -116,3 +116,9 @@ No `LICENSE` file is present, and a license has not been selected. The repositor
 ## Credits
 
 AudioStreamer uses PyAudioWPatch/PortAudio for Windows audio I/O, Kotlin and Android platform audio/network APIs, PlatformIO with the Arduino ESP32 framework, Adafruit SSD1306 and Adafruit GFX, and Python's standard library. See platform dependency manifests and upstream projects for their license notices.
+
+# Author
+
+**Shahid Arif Shaikh**
+
+- GitHub: https://github.com/ShahidShaikh308
