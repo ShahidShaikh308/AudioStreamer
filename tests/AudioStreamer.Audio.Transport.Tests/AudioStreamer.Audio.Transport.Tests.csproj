@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net9.0</TargetFramework><IsPackable>false</IsPackable><IsTestProject>true</IsTestProject></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio"><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets><PrivateAssets>all</PrivateAssets></PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AudioStreamer.Audio.Transport\AudioStreamer.Audio.Transport.csproj" />
+  </ItemGroup>
+  <ItemGroup><None Include="..\ProtocolFixtures\audio_v3_canonical.hex" Link="Fixtures\audio_v3_canonical.hex" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+</Project>

@@ -24,6 +24,7 @@ data class NodeSettings(
     val logLevel: String,
     val nodeId: Long = 0L,
     val controlPort: Int = 55050,
+    val controllerSecretHex: String = "",
 )
 
 data class NodeSnapshot(

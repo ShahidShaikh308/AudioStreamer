@@ -2,6 +2,12 @@
 
 Build each platform separately. These commands compile artifacts; they do not prove that devices can discover one another or that playback sounds correct.
 
+## .NET Windows v2 RC pipeline
+
+The Windows v2 solution targets .NET 9 and is built by `.github/workflows/windows-rc.yml` on Windows Server 2022. The solution is Release-only: an unqualified `dotnet build` or `dotnet test` uses Release, and project builds explicitly selecting Debug fail rather than producing a second configuration. Locally, install the .NET SDK with the .NET 9 targeting packs, then run `dotnet build AudioStreamer.sln` and `dotnet test AudioStreamer.sln`. The release workflow also runs Python/.NET Audio Protocol v3 compatibility checks, publishes Service and unpackaged WinUI payloads, builds the x64 WiX MSI, and exercises install, IPC snapshot, logs, SCM recovery configuration, and forced-process recovery on a disposable elevated runner. Run `tools/release/Invoke-RcValidation.ps1` only on a disposable elevated Windows machine; it installs and uninstalls the MSI.
+
+This is a validation scaffold, not a signed release process. The workflow currently emits an unsigned CI MSI artifact. Production signing, SBOM generation, clean-image prerequisite validation, upgrade/repair/rollback, and physical audio/LAN/soak tests remain release gates.
+
 ## Windows node and Device Manager
 
 Requirements: 64-bit Windows, Python 3.13 with Tkinter, and an internet connection on first launch. From the repository root, run `AudioStreamer.bat`. The launcher creates `.venv`, installs the pinned dependencies in `platforms/windows/requirements.txt`, and launches the node UI. After that environment exists, run `AudioStreamerDeviceManager.bat` for the control-only UI. The node configuration is created at `config/config.local.toml`; the safe template is `config/config.example.toml`.

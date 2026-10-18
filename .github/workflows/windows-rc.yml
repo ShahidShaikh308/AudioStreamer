@@ -1,0 +1,69 @@
+name: Windows RC validation
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Read shared product version
+        shell: pwsh
+        run: |
+          [xml]$versionProps = Get-Content -LiteralPath eng/Version.props -Raw
+          $productVersion = [string]$versionProps.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($productVersion)) { throw 'The shared product version is missing.' }
+          "PRODUCT_VERSION=$productVersion" >> $env:GITHUB_ENV
+
+      - name: Restore
+        run: dotnet restore AudioStreamer.sln -p:Version=${{ env.PRODUCT_VERSION }}
+      - name: Build full solution
+        run: dotnet build AudioStreamer.sln --configuration Release --no-restore -p:Version=${{ env.PRODUCT_VERSION }}
+      - name: Run .NET tests
+        run: dotnet test AudioStreamer.sln --configuration Release --no-build --no-restore -p:Version=${{ env.PRODUCT_VERSION }} --logger "trx;LogFileName=tests.trx"
+      - name: Protocol v3 Python and .NET compatibility
+        run: python -m unittest audio_plane.tests.test_protocol_dotnet_compat -v
+
+      - name: Publish service payload
+        shell: pwsh
+        run: dotnet publish src/AudioStreamer.Service/AudioStreamer.Service.csproj --configuration Release --runtime win-x64 --self-contained true -p:Version=${{ env.PRODUCT_VERSION }} -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false --output artifacts/payload/Service
+      - name: Publish Audio Agent payload
+        shell: pwsh
+        run: dotnet publish src/AudioStreamer.AudioAgent/AudioStreamer.AudioAgent.csproj --configuration Release --runtime win-x64 --self-contained true -p:Version=${{ env.PRODUCT_VERSION }} -p:DebugType=None -p:DebugSymbols=false --output artifacts/payload/Service
+      - name: Publish unpackaged WinUI payload
+        shell: pwsh
+        run: dotnet publish src/AudioStreamer.UI/AudioStreamer.UI.csproj --configuration Release --runtime win-x64 --self-contained true -p:Version=${{ env.PRODUCT_VERSION }} -p:WindowsAppSDKSelfContained=true -p:DebugType=None -p:DebugSymbols=false --output artifacts/payload/UI
+      - name: Build MSI
+        shell: pwsh
+        run: dotnet build installer/AudioStreamer.Installer.wixproj --configuration Release -p:Version=${{ env.PRODUCT_VERSION }} -p:PayloadRoot="${{ github.workspace }}\artifacts\payload"
+      - name: Install and exercise MSI
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem installer/bin/Release -Filter *.msi -Recurse | Select-Object -First 1
+          if ($null -eq $msi) { throw 'WiX did not produce an MSI.' }
+          .\tools\release\Invoke-RcValidation.ps1 -MsiPath $msi.FullName -InstallAndExercise -ExerciseCrashRecovery
+      - name: Upload RC package and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioStreamer-RC-${{ env.PRODUCT_VERSION }}-${{ github.run_number }}
+          path: |
+            installer/bin/Release/**/*.msi
+            **/TestResults/**/*.trx
+          if-no-files-found: warn

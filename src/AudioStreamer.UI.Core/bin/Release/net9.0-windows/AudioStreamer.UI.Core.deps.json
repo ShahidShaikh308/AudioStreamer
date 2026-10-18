@@ -1,0 +1,107 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "AudioStreamer.UI.Core/2.0.7": {
+        "dependencies": {
+          "AudioStreamer.IPC": "2.0.7",
+          "AudioStreamer.IPC.Contracts": "2.0.7",
+          "CommunityToolkit.Mvvm": "8.4.2",
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "AudioStreamer.UI.Core.dll": {}
+        }
+      },
+      "CommunityToolkit.Mvvm/8.4.2": {
+        "runtime": {
+          "lib/net8.0/CommunityToolkit.Mvvm.dll": {
+            "assemblyVersion": "8.4.0.0",
+            "fileVersion": "8.4.2.1"
+          }
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.20": {
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "Microsoft.Extensions.Logging.Abstractions/9.0.20": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.Logging.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "AudioStreamer.IPC/2.0.7": {
+        "dependencies": {
+          "AudioStreamer.IPC.Contracts": "2.0.7",
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "AudioStreamer.IPC.dll": {
+            "assemblyVersion": "2.0.7.0",
+            "fileVersion": "2.0.7.0"
+          }
+        }
+      },
+      "AudioStreamer.IPC.Contracts/2.0.7": {
+        "runtime": {
+          "AudioStreamer.IPC.Contracts.dll": {
+            "assemblyVersion": "2.0.7.0",
+            "fileVersion": "2.0.7.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "AudioStreamer.UI.Core/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "CommunityToolkit.Mvvm/8.4.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-WadCzGEc2U+3e20avRLng4qNtt4zoOGWrdUISqJWrHe3/FSnrYjuM5Sb4yQb09LhkBXrrI4Zt3dLKgRMbItsrg==",
+      "path": "communitytoolkit.mvvm/8.4.2",
+      "hashPath": "communitytoolkit.mvvm.8.4.2.nupkg.sha512"
+    },
+    "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-EsRc4piTdI3Ti5+cZwdpxn+mHwDCqT+b9ecmgYTTttpHFkYDyc4CenRNC9LrU0A+lTYsbQE8EvWC6sNp1Op0YA==",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/9.0.20",
+      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.9.0.20.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Logging.Abstractions/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ZTbbB2mz0MxOMVQF7/yKhRD9ok6QR5Kq+Ifsk7XfdGC3zJTfMeJZeKR8/DfnlyvrlQnaWEmMkrnM8d1sBs3afA==",
+      "path": "microsoft.extensions.logging.abstractions/9.0.20",
+      "hashPath": "microsoft.extensions.logging.abstractions.9.0.20.nupkg.sha512"
+    },
+    "AudioStreamer.IPC/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AudioStreamer.IPC.Contracts/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

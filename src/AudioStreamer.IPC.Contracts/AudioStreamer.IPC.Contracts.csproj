@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AudioStreamer.IPC.Contracts</AssemblyName>
+    <RootNamespace>AudioStreamer.IPC.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>

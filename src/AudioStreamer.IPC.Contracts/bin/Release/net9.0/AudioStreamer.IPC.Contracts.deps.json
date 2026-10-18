@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "AudioStreamer.IPC.Contracts/2.0.7": {
+        "runtime": {
+          "AudioStreamer.IPC.Contracts.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "AudioStreamer.IPC.Contracts/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

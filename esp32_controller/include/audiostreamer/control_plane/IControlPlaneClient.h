@@ -25,6 +25,13 @@ enum class ControlPlaneState : std::uint8_t {
 
 struct ControlPlaneSnapshot final {
     static constexpr std::size_t kMaximumPeers = 16;
+    static constexpr std::size_t kMaximumStreams = 8;
+    struct Stream final {
+        std::uint64_t senderNodeId = 0;
+        std::uint64_t receiverNodeId = 0;
+        std::uint16_t transactionId = 0;
+        enum class State : std::uint8_t { Waiting, Streaming, Error } state = State::Waiting;
+    };
     ControlPlaneState state = ControlPlaneState::Stopped;
     std::uint64_t nodeId = 0;
     std::uint8_t peerCount = 0;
@@ -35,6 +42,8 @@ struct ControlPlaneSnapshot final {
     std::uint16_t transactionId = 0;
     std::uint16_t errorCode = 0;
     char errorText[96]{};
+    std::uint8_t streamCount = 0;
+    Stream streams[kMaximumStreams]{};
 };
 
 class IControlPlaneClient {

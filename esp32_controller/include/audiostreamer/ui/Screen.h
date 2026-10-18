@@ -16,7 +16,10 @@ enum class ScreenId : std::uint8_t {
     ReceiverSelection,
     Confirm,
     Streaming,
+    ActiveRoutes,
     Settings,
+    Devices,
+    DeviceDetails,
 };
 
 class Screen {

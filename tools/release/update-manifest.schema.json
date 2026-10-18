@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://audiostreamer.invalid/schemas/update-manifest-v1.json",
+  "title": "AudioStreamer detached-signed update manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "productVersion", "minimumSupportedVersion", "architecture", "packageFile", "sha256", "signerThumbprint", "createdUtc"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "productVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "minimumSupportedVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "architecture": { "enum": ["x64"] },
+    "packageFile": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.msi$" },
+    "sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+    "signerThumbprint": { "type": "string", "pattern": "^[A-Fa-f0-9]{40,64}$" },
+    "createdUtc": { "type": "string", "format": "date-time" },
+    "rollbackPackageFile": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9._-]+\\.msi$" }
+  }
+}

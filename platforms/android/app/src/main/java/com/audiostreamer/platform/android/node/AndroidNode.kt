@@ -69,6 +69,7 @@ class AndroidNode(activity: ComponentActivity) : INode {
         capabilities = ::controlCapabilities,
         receivePort = { settings.receivePort },
         controlPort = { settings.controlPort },
+        controllerSecretHex = { settings.controllerSecretHex },
         statusProvider = ::controlStatus,
         commandHandler = ::dispatchControlCommand,
         onEvent = ::onControlEvent,
@@ -660,6 +661,8 @@ class AndroidNode(activity: ComponentActivity) : INode {
         require(settings.destinationPort in 1..65535) { "Destination port must be 1..65535" }
         require(settings.receivePort in 1..65535) { "Receive port must be 1..65535" }
         require(settings.controlPort in 49152..65535) { "Control port must be 49152..65535" }
+        if (settings.controllerSecretHex.isNotBlank())
+            com.audiostreamer.control_plane.ControlPacketCodec.parseControllerSecret(settings.controllerSecretHex)
         require(settings.logLevel.uppercase() in LOG_LEVELS) { "Log level must be DEBUG, INFO, WARNING, or ERROR" }
     }
 

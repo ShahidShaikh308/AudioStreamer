@@ -1,0 +1,7 @@
+<Project>
+  <Target Name="EnforceReleaseConfiguration"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(Configuration)' != 'Release'">
+    <Error Text="AudioStreamer builds are Release-only. Select Release configuration." />
+  </Target>
+</Project>

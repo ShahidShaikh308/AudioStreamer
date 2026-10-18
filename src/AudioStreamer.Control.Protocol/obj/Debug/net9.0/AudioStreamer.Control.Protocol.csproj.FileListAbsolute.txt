@@ -1,0 +1,12 @@
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\bin\Debug\net9.0\AudioStreamer.Control.Protocol.deps.json
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\bin\Debug\net9.0\AudioStreamer.Control.Protocol.dll
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\bin\Debug\net9.0\AudioStreamer.Control.Protocol.pdb
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\AudioStreamer.Control.Protocol.GeneratedMSBuildEditorConfig.editorconfig
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\AudioStreamer.Control.Protocol.AssemblyInfoInputs.cache
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\AudioStreamer.Control.Protocol.AssemblyInfo.cs
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\AudioStreamer.Control.Protocol.csproj.CoreCompileInputs.cache
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\AudioStreamer.Control.Protocol.sourcelink.json
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\AudioStreamer.Control.Protocol.dll
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\refint\AudioStreamer.Control.Protocol.dll
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\AudioStreamer.Control.Protocol.pdb
+C:\Development\Python\AudioStreamer\src\AudioStreamer.Control.Protocol\obj\Debug\net9.0\ref\AudioStreamer.Control.Protocol.dll

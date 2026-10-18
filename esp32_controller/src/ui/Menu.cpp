@@ -6,11 +6,16 @@
 
 namespace audiostreamer::ui {
 
-void Menu::setItems(const char* const* items, std::size_t count) {
+void Menu::setItems(const char* const* items, std::size_t count, bool preserveSelection) {
+    const std::size_t previousSelection = selected_;
     count_ = std::min(count, kMaximumItems);
     for (std::size_t i = 0; i < count_; ++i) items_[i] = items[i];
     for (std::size_t i = count_; i < kMaximumItems; ++i) items_[i] = nullptr;
-    resetSelection();
+    if (!preserveSelection || count_ == 0) resetSelection();
+    else {
+        selected_ = std::min(previousSelection, count_ - 1);
+        firstVisible_ = selected_ >= kVisibleItems ? selected_ - kVisibleItems + 1 : 0;
+    }
 }
 
 void Menu::resetSelection() {
@@ -41,7 +46,7 @@ void Menu::render(display::IDisplay& display, const char* title) const {
     frame.lines[0] = title;
     frame.lineCount = 1;
     if (count_ == 0) {
-        frame.lines[1] = "No peers found";
+        frame.lines[1] = "No items found";
         frame.lines[2] = "Press/Left: back";
         frame.lines[5] = "";
         frame.lineCount = 6;
@@ -52,7 +57,7 @@ void Menu::render(display::IDisplay& display, const char* title) const {
         frame.lines[1 + row] = items_[row + firstVisible_];
         frame.lineCount = static_cast<std::uint8_t>(2 + row);
     }
-    frame.lines[5] = count_ > kVisibleItems ? "UP/DN scroll  OK" : "UP/DN move  OK";
+    frame.lines[5] = count_ > kVisibleItems ? "UP/DN scroll L:back" : "UP/DN move OK L:back";
     frame.lineCount = 6;
 
     char* selectedLine = nullptr;

@@ -1,0 +1,198 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Engine\\AudioStreamer.Engine.csproj": {}
+  },
+  "projects": {
+    "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Control.Protocol\\AudioStreamer.Control.Protocol.csproj": {
+      "version": "2.0.7",
+      "restore": {
+        "projectUniqueName": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Control.Protocol\\AudioStreamer.Control.Protocol.csproj",
+        "projectName": "AudioStreamer.Control.Protocol",
+        "projectPath": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Control.Protocol\\AudioStreamer.Control.Protocol.csproj",
+        "packagesPath": "C:\\Users\\shaik\\.nuget\\packages\\",
+        "outputPath": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Control.Protocol\\obj\\",
+        "projectStyle": "PackageReference",
+        "centralPackageVersionsManagementEnabled": true,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\shaik\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "framework": "net9.0",
+            "targetAlias": "net9.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.400"
+      },
+      "frameworks": {
+        "net9.0": {
+          "framework": "net9.0",
+          "targetAlias": "net9.0",
+          "centralPackageVersions": {
+            "CommunityToolkit.Mvvm": "8.4.2",
+            "Microsoft.Extensions.Configuration.Abstractions": "9.0.20",
+            "Microsoft.Extensions.DependencyInjection": "9.0.20",
+            "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20",
+            "Microsoft.Extensions.Hosting": "9.0.20",
+            "Microsoft.Extensions.Hosting.WindowsServices": "9.0.20",
+            "Microsoft.Extensions.Logging.Abstractions": "9.0.20",
+            "Microsoft.Extensions.Logging.Debug": "9.0.20",
+            "Microsoft.NET.Test.Sdk": "18.10.1",
+            "Microsoft.WindowsAppSDK": "2.5.1",
+            "NAudio.Wasapi": "3.1.0",
+            "System.IO.Pipes.AccessControl": "5.0.0",
+            "WixToolset.Firewall.wixext": "5.0.2",
+            "WixToolset.Util.wixext": "5.0.2",
+            "xunit": "2.9.3",
+            "xunit.runner.visualstudio": "2.8.2"
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.402/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Engine\\AudioStreamer.Engine.csproj": {
+      "version": "2.0.7",
+      "restore": {
+        "projectUniqueName": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Engine\\AudioStreamer.Engine.csproj",
+        "projectName": "AudioStreamer.Engine",
+        "projectPath": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Engine\\AudioStreamer.Engine.csproj",
+        "packagesPath": "C:\\Users\\shaik\\.nuget\\packages\\",
+        "outputPath": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Engine\\obj\\",
+        "projectStyle": "PackageReference",
+        "centralPackageVersionsManagementEnabled": true,
+        "fallbackFolders": [
+          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+        ],
+        "configFilePaths": [
+          "C:\\Users\\shaik\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net9.0"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net9.0": {
+            "framework": "net9.0",
+            "targetAlias": "net9.0",
+            "projectReferences": {
+              "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Control.Protocol\\AudioStreamer.Control.Protocol.csproj": {
+                "projectPath": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Control.Protocol\\AudioStreamer.Control.Protocol.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        },
+        "SdkAnalysisLevel": "10.0.400"
+      },
+      "frameworks": {
+        "net9.0": {
+          "framework": "net9.0",
+          "targetAlias": "net9.0",
+          "dependencies": {
+            "Microsoft.Extensions.DependencyInjection.Abstractions": {
+              "target": "Package",
+              "version": "[9.0.20, )",
+              "versionCentrallyManaged": true
+            },
+            "Microsoft.Extensions.Logging.Abstractions": {
+              "target": "Package",
+              "version": "[9.0.20, )",
+              "versionCentrallyManaged": true
+            }
+          },
+          "centralPackageVersions": {
+            "CommunityToolkit.Mvvm": "8.4.2",
+            "Microsoft.Extensions.Configuration.Abstractions": "9.0.20",
+            "Microsoft.Extensions.DependencyInjection": "9.0.20",
+            "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20",
+            "Microsoft.Extensions.Hosting": "9.0.20",
+            "Microsoft.Extensions.Hosting.WindowsServices": "9.0.20",
+            "Microsoft.Extensions.Logging.Abstractions": "9.0.20",
+            "Microsoft.Extensions.Logging.Debug": "9.0.20",
+            "Microsoft.NET.Test.Sdk": "18.10.1",
+            "Microsoft.WindowsAppSDK": "2.5.1",
+            "NAudio.Wasapi": "3.1.0",
+            "System.IO.Pipes.AccessControl": "5.0.0",
+            "WixToolset.Firewall.wixext": "5.0.2",
+            "WixToolset.Util.wixext": "5.0.2",
+            "xunit": "2.9.3",
+            "xunit.runner.visualstudio": "2.8.2"
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.402/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

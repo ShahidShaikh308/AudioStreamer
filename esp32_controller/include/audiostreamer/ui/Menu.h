@@ -14,7 +14,7 @@ public:
     static constexpr std::size_t kMaximumItems = 16;
     static constexpr std::size_t kVisibleItems = 4;
 
-    void setItems(const char* const* items, std::size_t count);
+    void setItems(const char* const* items, std::size_t count, bool preserveSelection = false);
     void resetSelection();
     bool handleInput(input::InputEvent event, std::size_t& selectedItem);
     void render(display::IDisplay& display, const char* title) const;

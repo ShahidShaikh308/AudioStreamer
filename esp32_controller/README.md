@@ -6,12 +6,15 @@ Standalone PlatformIO firmware for the ESP32 DevKit V1 (ESP-WROOM-32), using Ard
 
 - Persists a 64-bit node identity in ESP32 Preferences.
 - Connects to Wi-Fi in station mode and retries after disconnects.
-- Announces itself with Control Protocol v1 `HELLO` and `HEARTBEAT`, answers discovered peers, handles `GOODBYE`, and expires stale peers.
+- Passively listens for other nodes' Control Protocol v1 `HELLO`, `HEARTBEAT`, and `GOODBYE` messages and expires stale peers. It does not announce itself, answer peer announcements, or send a `GOODBYE`, so it does not appear in the audio nodes' peer lists.
 - Maintains a bounded registry of 16 peers and presents sender/receiver lists based on advertised capability bits.
-- Queues existing `START_STREAM` and `STOP_STREAM` messages through the Control Plane worker and displays returned stream status/errors.
-- Provides Boot, Connecting, Discovering, Main Menu, Sender Selection, Receiver Selection, Confirm, Streaming, and Settings screens.
+- Sends authenticated Control Protocol v2 `START_STREAM` and `STOP_STREAM` commands through the Control Plane worker and displays returned stream status/errors.
+- Opens directly to a compact status dashboard after Wi-Fi connects. It shows network/control-plane readiness and the live node count.
+- Provides a guided New audio route flow that filters senders and receivers by capability, excludes selecting the same node twice, and asks for a final confirmation before sending commands.
+- Provides a nearby-device list with each device's platform, online state, IP/port, and send/receive capabilities, plus an Active routes view that tracks multiple simultaneous routes.
+- Settings are read-only on the controller and show current Wi-Fi/control readiness, local IP, discovered node count, and configured ports; configuration remains in firmware settings.
 
-Audio capture and transport, discovery changes, and new Control Protocol message types are outside this firmware's scope. It uses the existing Control Protocol v1 message layout; no protocol behavior is added here.
+The ESP32 remains a passive observer: it consumes unauthenticated v1 discovery and status messages but never announces itself or joins the nodes' peer lists. Controller commands use v2 HMAC-SHA256 authentication. V1 node-to-node streaming remains unchanged. The shared-key setup and receiver compatibility rules are documented in [`CONTROL_PROTOCOL.md`](../docs/CONTROL_PROTOCOL.md).
 
 ## Architecture and ownership
 
@@ -24,12 +27,12 @@ KY-023 -> Ky023Joystick -> ControllerApp -> ControllerUi -> SSD1306
                               +-- IControlPlaneClient command queue
                                       |
                                Control Plane worker
-                               owns UDP transport + peer registry
+                               listens on UDP + owns peer registry
                                       |
-                               ControlProtocolV1 codec
+                               v1 discovery/status + v2 HMAC command codec
 ```
 
-The Arduino main task polls input, Wi-Fi reconnect status, and the latest Control Plane snapshot, then renders at a throttled rate. A dedicated FreeRTOS task owns all Control Plane UDP operations and the peer registry. FreeRTOS queues transfer commands and immutable snapshots between the main task and worker. Wi-Fi event callbacks only report connection state. No network operation is performed by a screen.
+The Arduino main task polls input, Wi-Fi reconnect status, and the latest Control Plane snapshot, then renders at a throttled rate. A dedicated FreeRTOS task owns all Control Plane UDP operations and the peer registry. It receives node announcements and heartbeats but sends no presence traffic. FreeRTOS queues transfer commands and immutable snapshots between the main task and worker. Wi-Fi event callbacks only report connection state. No network operation is performed by a screen.
 
 The main polling path uses fixed-capacity arrays and stack frames; it does not allocate dynamically. Driver/library initialization may allocate internally during startup (for example, the SSD1306 framebuffer and FreeRTOS queues). The Control Plane task reserves an 8 KiB stack for its packet buffers and nested parsing/snapshot work. The registry retains at most 31 bytes of a node name and 15 bytes of a platform string for local display/storage; incoming protocol text is parsed according to its wire length before this bounded copy.
 
@@ -42,7 +45,7 @@ The main polling path uses fixed-capacity arrays and stack frames; it does not a
 | KY-023 Y axis | ADC GPIO 35 |
 | KY-023 button | GPIO 32, active-low with internal pull-up |
 
-The joystick uses 12-bit ADC reads, configurable center/dead zone and button debounce. Direction changes and button press/release are edge events; held directions do not repeat.
+The joystick uses 12-bit ADC reads, configurable center/dead zone and button debounce. Direction changes and button press/release are edge events; held directions do not repeat. In the UI, Up/Down moves through lists, the button selects or confirms, and Left returns to the previous screen. The guided route flow is: New audio route → sender → receiver → confirm. From the dashboard, Nearby devices opens status/details and Active routes lists concurrent routes. Select a route and press the button to request that route stop; Left returns to the list. Routes are removed when a stop or failure is observed, or when either peer sends GOODBYE or expires from the peer registry. Commands remain best-effort and the controller cannot confirm that audio has stopped at the receiving device.
 
 ## Build and flash
 
@@ -55,13 +58,13 @@ python -m platformio run --target upload
 python -m platformio device monitor --baud 115200
 ```
 
-The build does not require Wi-Fi credentials. To enable Wi-Fi, copy `include/audiostreamer/config/WifiSettings.example.h` to `include/audiostreamer/config/WifiSettings.h`, then replace the example values:
+The build does not require Wi-Fi credentials. To enable Wi-Fi and controller commands, copy `include/audiostreamer/config/WifiSettings.example.h` to `include/audiostreamer/config/WifiSettings.h`, then set the Wi-Fi credentials and the same 64-hex-character controller secret used by the Windows and Android nodes:
 
 ```sh
 cp include/audiostreamer/config/WifiSettings.example.h include/audiostreamer/config/WifiSettings.h
 ```
 
-The private file is ignored by Git. Keep credentials out of source control.
+Set `AUDIOSTREAMER_CONTROLLER_SECRET_HEX` in that private header before compiling and flashing. Leave it empty to disable controller commands. The private file is ignored by Git. Keep both Wi-Fi credentials and the controller secret out of source control.
 
 ## Repository layout
 
@@ -70,7 +73,7 @@ platformio.ini
 include/audiostreamer/
   app/             Controller composition
   config/          Controller configuration and credential example
-  control_plane/   v1 codec, peer registry, queues, and worker contract
+  control_plane/   v1 discovery codec, v2 authenticated commands, peer registry, queues, and worker contract
   display/         Display frame and display interfaces/driver contract
   input/           Input events and joystick interface/driver contract
   network/         Wi-Fi and UDP Control Plane transport interfaces/drivers
@@ -78,7 +81,7 @@ include/audiostreamer/
 src/
   app/             Main-task orchestration
   config/          Persistent node identity
-  control_plane/   Protocol, registry, queue, and worker implementation
+  control_plane/   Protocol v1/v2, registry, queue, and worker implementation
   display/         SSD1306 driver
   input/           KY-023 driver
   network/         Wi-Fi and UDP implementations

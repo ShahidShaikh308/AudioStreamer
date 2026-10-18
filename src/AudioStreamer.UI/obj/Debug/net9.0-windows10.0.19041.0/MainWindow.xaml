@@ -1,0 +1,77 @@
+﻿<Window
+    x:Class="AudioStreamer.UI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="AudioStreamer">
+    <Grid>
+        <NavigationView x:ConnectionId='2' x:Name="Navigation" IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+                                                              PaneDisplayMode="LeftCompact">
+            <NavigationView.KeyboardAccelerators>
+                <KeyboardAccelerator x:ConnectionId='3' Key="K" Modifiers="Control"                            />
+                <KeyboardAccelerator x:ConnectionId='4' Key="R" Modifiers="Control"                             />
+                <KeyboardAccelerator x:ConnectionId='5' Key="L" Modifiers="Control"                                 />
+                <KeyboardAccelerator x:ConnectionId='6' Key="Escape"                            />
+            </NavigationView.KeyboardAccelerators>
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Home" Tag="Dashboard" Icon="Home" />
+                <NavigationViewItem Content="Devices" Tag="Devices" Icon="People" />
+                <NavigationViewItem Content="Sessions" Tag="Sessions" Icon="Play" />
+                <NavigationViewItem Content="Audio devices" Tag="AudioDevices" Icon="Audio" />
+                <NavigationViewItem Content="Statistics" Tag="Statistics" Icon="View" />
+                <NavigationViewItem Content="Diagnostics" Tag="Diagnostics" Icon="Repair" />
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem Content="Settings" Tag="Settings" Icon="Setting" />
+                <NavigationViewItem Content="About" Tag="About" Icon="Help" />
+            </NavigationView.FooterMenuItems>
+            <NavigationView.Header>
+                <Grid Padding="16,8" ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border Width="32" Height="32" CornerRadius="10" Background="{StaticResource AccentSoftBrush}">
+                            <FontIcon Glyph="&#xE768;" FontSize="16" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel Spacing="0" VerticalAlignment="Center">
+                            <TextBlock Text="AudioStreamer" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding NodeName}" FontSize="12" Opacity="0.68" />
+                        </StackPanel>
+                    </StackPanel>
+                    <AutoSuggestBox x:ConnectionId='7' x:Name="GlobalSearch" Grid.Column="1" PlaceholderText="Search or run a command…  Ctrl+K"
+                                    MaxWidth="460" HorizontalAlignment="Stretch"
+                                                                                                                   
+                                                                           >
+                        <AutoSuggestBox.QueryIcon><SymbolIcon Symbol="Find" /></AutoSuggestBox.QueryIcon>
+                    </AutoSuggestBox>
+                    <Border Grid.Column="2" Padding="12,7" CornerRadius="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="8" Height="8" Fill="{ThemeResource SystemFillColorNeutralBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding ConnectionStatus.Message}" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </NavigationView.Header>
+            <Grid>
+                <ContentControl x:ConnectionId='8' x:Name="PageHost" />
+                <Border x:ConnectionId='9' x:Name="OfflineOverlay" Background="{ThemeResource SolidBackgroundFillColorBaseBrush}" Visibility="Collapsed">
+                    <Border Style="{StaticResource AudioCardStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="500">
+                    <StackPanel Spacing="14">
+                        <FontIcon Glyph="&#xE783;" FontSize="34" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Reconnecting to your node" Style="{StaticResource TitleTextBlockStyle}" TextAlignment="Center" />
+                        <TextBlock Text="AudioStreamer is trying to reconnect. Active discovery and streams continue in the background while this window restores its view." TextWrapping="Wrap" TextAlignment="Center" Opacity="0.75" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                            <Button x:ConnectionId='10' Content="Try now"                     Style="{StaticResource AccentButtonStyle}" />
+                        </StackPanel>
+                        <TextBlock Text="The connection will retry automatically. You can keep using this window when it reconnects." TextAlignment="Center" Opacity="0.6" />
+                    </StackPanel>
+                    </Border>
+                </Border>
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Window>
+

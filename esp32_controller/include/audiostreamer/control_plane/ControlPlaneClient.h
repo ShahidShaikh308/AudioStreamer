@@ -45,8 +45,9 @@ private:
 
     static void taskEntry(void* context);
     void run();
-    std::size_t makeHello(std::uint8_t* buffer, std::size_t capacity) const;
     void publish(ControlPlaneState state, bool force = false);
+    void removeStream(std::size_t index);
+    bool removeStreamsForMissingPeers();
     bool queueCommand(ControlMessageType type, std::uint64_t senderNodeId,
                       std::uint64_t receiverNodeId);
 
@@ -63,12 +64,15 @@ private:
     bool transportReady_ = false;
     ControlPlaneState currentState_ = ControlPlaneState::Stopped;
     std::uint8_t publishedPeerCount_ = 0;
+    std::size_t publishedStreamCount_ = 0;
     ControlPlaneSnapshot::StreamState streamState_ = ControlPlaneSnapshot::StreamState::Idle;
     std::uint64_t activeSenderNodeId_ = 0;
     std::uint64_t activeReceiverNodeId_ = 0;
     std::uint16_t activeTransactionId_ = 0;
     std::uint16_t streamErrorCode_ = 0;
     char streamErrorText_[96]{};
+    std::array<ControlPlaneSnapshot::Stream, ControlPlaneSnapshot::kMaximumStreams> streams_{};
+    std::size_t streamCount_ = 0;
     std::atomic<std::uint16_t> nextTransactionId_{1};
 };
 

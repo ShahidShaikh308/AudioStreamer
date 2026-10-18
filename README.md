@@ -3,7 +3,7 @@
 ![Status: active development](https://img.shields.io/badge/status-active%20development-blue)
 ![Audio protocol: v3](https://img.shields.io/badge/audio%20protocol-v3-2563eb)
 ![Control protocol: v1](https://img.shields.io/badge/control%20protocol-v1-2563eb)
-![CI: not configured](https://img.shields.io/badge/CI-not%20configured-lightgrey)
+![CI: Windows RC workflow](https://img.shields.io/badge/CI-Windows%20RC%20workflow-blue)
 
 AudioStreamer is an educational, low-latency PCM transport project. Windows and Android nodes can capture eligible system playback, send raw PCM over local UDP, receive PCM, and play it. A separate Control Plane discovers nodes and requests stream lifecycle changes. An ESP32 provides a hardware Control Plane interface and never transports audio.
 
@@ -84,6 +84,8 @@ The standalone desktop control application starts with `AudioStreamerDeviceManag
 
 Platform build steps, tool versions, APK output, PlatformIO commands, and validation limits are in [BUILDING.md](BUILDING.md). Windows launchers are provided at the repository root. Android is built with the checked-in Gradle wrapper. ESP32 is built and flashed with PlatformIO.
 
+The .NET Windows v2 service/client, MSI scaffold, and RC workflow are in production-readiness validation; they do not replace the Python v1 launcher described above. A signed, supported end-user release is not yet declared. See [Installer and Updates](docs/INSTALLER_AND_UPDATES.md).
+
 ## ESP32 Controller
 
 The ESP32 is a Control Plane client with a live node list and joystick-driven sender/receiver selection. It sends existing Control Protocol v1 START/STOP messages; its UI can report that a command was queued but cannot confirm audible playback. It contains no audio capture, playback, or PCM networking. Wi-Fi credentials belong in the ignored `esp32_controller/include/audiostreamer/config/WifiSettings.h`; follow [esp32_controller/README.md](esp32_controller/README.md).
@@ -105,7 +107,7 @@ The ESP32 is a Control Plane client with a live node list and joystick-driven se
 
 ## Development and contributions
 
-Read [DEVELOPMENT.md](DEVELOPMENT.md) before changing protocol, platform boundaries, or Control Plane responsibilities. Contributions should include relevant build/validation results and distinguish host compilation from hardware/network verification. CI is not configured yet.
+Read [DEVELOPMENT.md](DEVELOPMENT.md) before changing protocol, platform boundaries, or Control Plane responsibilities. Contributions should include relevant build/validation results and distinguish host compilation from hardware/network verification. The Windows RC workflow builds/tests the .NET solution, checks Python/.NET Audio Protocol v3 compatibility, packages an MSI, and performs an elevated disposable-runner install/recovery smoke test.
 
 ## License
 

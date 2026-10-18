@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <AssemblyName>AudioStreamer.Platform.Windows</AssemblyName>
+    <RootNamespace>AudioStreamer.Platform.Windows</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AudioStreamer.Engine\AudioStreamer.Engine.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\bin\Release\net9.0\AudioStreamer.IPC.Contracts.deps.json
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\bin\Release\net9.0\AudioStreamer.IPC.Contracts.dll
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\bin\Release\net9.0\AudioStreamer.IPC.Contracts.pdb
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\AudioStreamer.IPC.Contracts.GeneratedMSBuildEditorConfig.editorconfig
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\AudioStreamer.IPC.Contracts.AssemblyInfoInputs.cache
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\AudioStreamer.IPC.Contracts.AssemblyInfo.cs
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\AudioStreamer.IPC.Contracts.csproj.CoreCompileInputs.cache
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\AudioStreamer.IPC.Contracts.sourcelink.json
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\AudioStreamer.IPC.Contracts.dll
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\refint\AudioStreamer.IPC.Contracts.dll
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\AudioStreamer.IPC.Contracts.pdb
+C:\Development\Python\AudioStreamer\src\AudioStreamer.IPC.Contracts\obj\Release\net9.0\ref\AudioStreamer.IPC.Contracts.dll

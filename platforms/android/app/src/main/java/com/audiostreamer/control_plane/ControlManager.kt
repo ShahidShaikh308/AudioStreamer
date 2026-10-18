@@ -14,6 +14,7 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.SocketTimeoutException
+import java.util.LinkedHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 sealed interface ControlEvent {
@@ -35,6 +36,7 @@ class ControlManager(
     private val capabilities: () -> Int,
     private val receivePort: () -> Int,
     private val controlPort: () -> Int,
+    private val controllerSecretHex: () -> String,
     private val statusProvider: () -> NodeStatus,
     private val commandHandler: (ControlPacket) -> Unit,
     private val onEvent: (ControlEvent) -> Unit,
@@ -44,6 +46,8 @@ class ControlManager(
     private val outbound = Channel<Outbound>(capacity = 128)
     private val started = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
+    private val replayGate = Any()
+    private val controllerNonces = LinkedHashMap<String, Long>()
     private data class Outbound(val message: ControlPacket, val host: String, val port: Int)
 
     fun start() {
@@ -118,7 +122,8 @@ class ControlManager(
                         val packet = DatagramPacket(receiveBuffer, receiveBuffer.size)
                         socket.receive(packet)
                         if (packet.length <= ControlPacketCodec.MAX_DATAGRAM_SIZE && packet.port == controlPort()) {
-                            handle(ControlPacketCodec.decode(packet.data.copyOf(packet.length), packet.address))
+                            handle(ControlPacketCodec.decode(packet.data.copyOf(packet.length), packet.address,
+                                controllerSecretHex().takeIf { it.isNotBlank() }))
                         }
                     } catch (_: SocketTimeoutException) {
                         // Timed receive keeps heartbeat and cancellation latency bounded.
@@ -158,13 +163,29 @@ class ControlManager(
                 }
             }
             is GoodbyePacket -> if (packet.nodeId != nodeId) registry.remove(packet.nodeId)?.let { onEvent(ControlEvent.NodeLost(it)) }
-            is StartStreamPacket, is StopStreamPacket -> {
+            is StartStreamPacket, is StopStreamPacket, is AuthenticatedControllerCommandPacket -> {
+                val authenticated = packet is AuthenticatedControllerCommandPacket
                 val pair = when (packet) {
                     is StartStreamPacket -> packet.senderNodeId to packet.receiverNodeId
                     is StopStreamPacket -> packet.senderNodeId to packet.receiverNodeId
+                    is AuthenticatedControllerCommandPacket -> packet.senderNodeId to packet.receiverNodeId
                     else -> error("unreachable")
                 }
-                if (nodeId == pair.first || nodeId == pair.second) commandHandler(packet)
+                if (authenticated) {
+                    val controller = packet as AuthenticatedControllerCommandPacket
+                    val nonceKey = "${controller.controllerNodeId.toULong()}:${controller.nonce.joinToString("") { "%02x".format(it) }}"
+                    if (!acceptControllerNonce(nonceKey)) {
+                        onEvent(ControlEvent.Error("Rejected replayed controller command"))
+                        return
+                    }
+                    if (nodeId == pair.first || nodeId == pair.second) {
+                        commandHandler(if (controller.isStart) StartStreamPacket(pair.first, pair.second, controller.transactionId)
+                            else StopStreamPacket(pair.first, pair.second, controller.transactionId))
+                    }
+                } else if (nodeId == pair.first || nodeId == pair.second) {
+                    val peerId = if (nodeId == pair.first) pair.second else pair.first
+                    if (registry.get(peerId)?.address == decoded.address.hostAddress) commandHandler(packet)
+                }
             }
             is StreamStatusPacket, is ErrorPacket -> onEvent(ControlEvent.Stream(packet))
         }
@@ -189,10 +210,27 @@ class ControlManager(
         socket.send(DatagramPacket(bytes, bytes.size, InetAddress.getByName(outbound.host), outbound.port))
     }
 
+    private fun acceptControllerNonce(key: String): Boolean = synchronized(replayGate) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val iterator = controllerNonces.entries.iterator()
+        while (iterator.hasNext()) if (now - iterator.next().value >= CONTROLLER_REPLAY_RETENTION_MS) iterator.remove()
+        if (controllerNonces.containsKey(key)) return@synchronized false
+        while (controllerNonces.size >= MAX_CONTROLLER_NONCES) {
+            val oldest = controllerNonces.entries.iterator()
+            if (!oldest.hasNext()) break
+            oldest.next()
+            oldest.remove()
+        }
+        controllerNonces[key] = now
+        true
+    }
+
     private fun broadcastAddress(): String = InetAddress.getByAddress(byteArrayOf(-1, -1, -1, -1)).hostAddress!!
 
     private companion object {
         const val HEARTBEAT_MS = 3000L
         const val PEER_TIMEOUT_MS = 10000L
+        const val CONTROLLER_REPLAY_RETENTION_MS = 10 * 60 * 1000L
+        const val MAX_CONTROLLER_NONCES = 1024
     }
 }

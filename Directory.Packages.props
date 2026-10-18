@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+	<PackageVersion Include="WixToolset.Util.wixext" Version="5.0.2" />
+	<PackageVersion Include="WixToolset.Firewall.wixext" Version="5.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.20" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.20" />
+    <PackageVersion Include="NAudio.Wasapi" Version="3.1.0" />
+    <PackageVersion Include="System.IO.Pipes.AccessControl" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+</Project>

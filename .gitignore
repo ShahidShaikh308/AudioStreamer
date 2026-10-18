@@ -71,12 +71,22 @@ Thumbs.db
 Desktop.ini
 
 # Native build and packaging outputs
+**/bin/
+**/obj/
+**/TestResults/
+artifacts/
 *.obj
 *.pdb
 *.ilk
 *.exe
 *.elf
 *.bin
+
+# WiX installer build outputs
+/installer/bin/
+/installer/obj/
+/installer/payload/
+/esp32_controller/platforms/android/.gradle-user/pio-core/
 
 # Platform-specific local build cache
 platforms/android/.gradle-user/

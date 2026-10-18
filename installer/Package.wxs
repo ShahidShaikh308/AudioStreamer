@@ -1,0 +1,91 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+  <Package Name="AudioStreamer" Manufacturer="AudioStreamer Project" Version="$(var.ProductVersion)"
+           UpgradeCode="{B510C214-863F-4AE4-8A9D-627223C43DE1}" Scope="perMachine" InstallerVersion="500">
+    <MajorUpgrade DowngradeErrorMessage="A newer AudioStreamer version is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="AudioStreamer" Title="AudioStreamer" Level="1">
+      <ComponentGroupRef Id="ServicePayload" />
+      <ComponentGroupRef Id="UiPayload" />
+      <ComponentGroupRef Id="ServiceRegistration" />
+      <ComponentGroupRef Id="DataDirectories" />
+      <ComponentGroupRef Id="StartMenuShortcuts" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="AudioStreamer">
+        <Directory Id="SERVICEFOLDER" Name="Service" />
+        <Directory Id="UIFOLDER" Name="UI" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATADIR" Name="AudioStreamer">
+        <Directory Id="LOGDIR" Name="Logs" />
+        <Directory Id="BACKUPDIR" Name="MigrationBackups" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="PROGRAMMENUDIR" Name="AudioStreamer" />
+    </StandardDirectory>
+
+    <ComponentGroup Id="ServicePayload" Directory="SERVICEFOLDER">
+      <Files Include="!(bindpath.PayloadRoot)\Service\**">
+        <Exclude Files="!(bindpath.PayloadRoot)\Service\AudioStreamer.Service.exe" />
+      </Files>
+    </ComponentGroup>
+    <ComponentGroup Id="UiPayload" Directory="UIFOLDER">
+      <Files Include="!(bindpath.PayloadRoot)\UI\**" />
+    </ComponentGroup>
+    <ComponentGroup Id="ServiceRegistration" Directory="SERVICEFOLDER">
+      <Component Id="AudioStreamerServiceComponent" Guid="{3A56DCA3-42A1-4358-9AE2-3F58B110EF5B}">
+        <File Id="AudioStreamerServiceExe" Source="!(bindpath.PayloadRoot)\Service\AudioStreamer.Service.exe" KeyPath="yes" />
+        <ServiceInstall Id="AudioStreamerServiceInstall" Name="AudioStreamer" DisplayName="AudioStreamer"
+                        Description="AudioStreamer background node runtime" Type="ownProcess" Start="auto"
+                        ErrorControl="normal" Account="LocalSystem" Vital="yes">
+          <ServiceConfig ServiceSid="unrestricted" OnInstall="yes" OnReinstall="yes" />
+          <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart"
+                              ThirdFailureActionType="none" ResetPeriodInDays="1" RestartServiceDelayInSeconds="10" />
+        </ServiceInstall>
+        <ServiceControl Id="AudioStreamerServiceControl" Name="AudioStreamer" Start="install" Stop="both"
+                        Remove="uninstall" Wait="yes" />
+      </Component>
+      <Component Id="AudioReceiveFirewallRule" Guid="{6E6D948C-EAD4-4260-A19D-DB3DD6EAC3B9}">
+        <RegistryValue Root="HKLM" Key="Software\AudioStreamer" Name="AudioReceiveFirewallRule" Type="integer" Value="1" KeyPath="yes" />
+        <fw:FirewallException Name="AudioStreamer Audio Receiver (UDP 5006)"
+                              Description="Allows AudioStreamer audio from devices on the local network."
+                              Port="5006" Protocol="udp" Scope="localSubnet" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="DataDirectories">
+      <Component Id="AudioStreamerDataFolderComponent" Directory="DATADIR" Guid="{6F583A36-CA9C-48D8-85E7-630B8E7B78E5}">
+        <CreateFolder>
+          <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+          <util:PermissionEx User="BUILTIN\Administrators" GenericAll="yes" />
+        </CreateFolder>
+        <RegistryValue Root="HKLM" Key="Software\AudioStreamer" Name="DataDirectory" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="AudioStreamerLogsFolderComponent" Directory="LOGDIR" Guid="{3A70EDC6-2238-4F0F-9C8E-65AEF0763DF7}">
+        <CreateFolder>
+          <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+          <util:PermissionEx User="BUILTIN\Administrators" GenericAll="yes" />
+        </CreateFolder>
+        <RegistryValue Root="HKLM" Key="Software\AudioStreamer" Name="LogsDirectory" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+      <Component Id="AudioStreamerBackupFolderComponent" Directory="BACKUPDIR" Guid="{7D78C296-780E-4B51-BE00-5AB3574E6D0B}">
+        <CreateFolder>
+          <util:PermissionEx User="NT AUTHORITY\LOCAL SERVICE" GenericAll="yes" />
+          <util:PermissionEx User="BUILTIN\Administrators" GenericAll="yes" />
+        </CreateFolder>
+        <RegistryValue Root="HKLM" Key="Software\AudioStreamer" Name="MigrationBackups" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="StartMenuShortcuts" Directory="PROGRAMMENUDIR">
+      <Component Id="AudioStreamerStartMenuShortcut" Guid="{13F0B06C-F55E-45AB-907D-BC54F7D50112}">
+        <Shortcut Id="AudioStreamerShortcut" Name="AudioStreamer" Target="[UIFOLDER]AudioStreamer.UI.exe" WorkingDirectory="UIFOLDER" />
+        <RemoveFolder Id="RemoveAudioStreamerMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKLM" Key="Software\AudioStreamer" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Package>
+</Wix>

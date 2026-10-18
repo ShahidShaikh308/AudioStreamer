@@ -1,0 +1,157 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "AudioStreamer.Platform.Windows.Audio/2.0.2": {
+        "dependencies": {
+          "AudioStreamer.Audio.Transport": "2.0.2",
+          "AudioStreamer.AudioAgent.Contracts": "2.0.2",
+          "AudioStreamer.Engine": "2.0.2",
+          "Microsoft.Extensions.Configuration.Abstractions": "9.0.20",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20",
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "AudioStreamer.Platform.Windows.Audio.dll": {}
+        }
+      },
+      "Microsoft.Extensions.Configuration.Abstractions/9.0.20": {
+        "dependencies": {
+          "Microsoft.Extensions.Primitives": "9.0.20"
+        },
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.Configuration.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.20": {
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "Microsoft.Extensions.Logging.Abstractions/9.0.20": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.Logging.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "Microsoft.Extensions.Primitives/9.0.20": {
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.Primitives.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "AudioStreamer.Audio.Transport/2.0.2": {
+        "dependencies": {
+          "AudioStreamer.Engine": "2.0.2"
+        },
+        "runtime": {
+          "AudioStreamer.Audio.Transport.dll": {
+            "assemblyVersion": "2.0.2.0",
+            "fileVersion": "2.0.2.0"
+          }
+        }
+      },
+      "AudioStreamer.AudioAgent.Contracts/2.0.2": {
+        "runtime": {
+          "AudioStreamer.AudioAgent.Contracts.dll": {
+            "assemblyVersion": "2.0.2.0",
+            "fileVersion": "2.0.2.0"
+          }
+        }
+      },
+      "AudioStreamer.Control.Protocol/2.0.2": {
+        "runtime": {
+          "AudioStreamer.Control.Protocol.dll": {
+            "assemblyVersion": "2.0.2.0",
+            "fileVersion": "2.0.2.0"
+          }
+        }
+      },
+      "AudioStreamer.Engine/2.0.2": {
+        "dependencies": {
+          "AudioStreamer.Control.Protocol": "2.0.2",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20",
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "AudioStreamer.Engine.dll": {
+            "assemblyVersion": "2.0.2.0",
+            "fileVersion": "2.0.2.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "AudioStreamer.Platform.Windows.Audio/2.0.2": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.Extensions.Configuration.Abstractions/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-wNR2jEXCTwMKXKi/iWvi3PfRaxtU2j3VmzYHsbVhllQTKRpr1HmHewdwkLhlYk/VatbqDmprW1+tN2O/BA5OKA==",
+      "path": "microsoft.extensions.configuration.abstractions/9.0.20",
+      "hashPath": "microsoft.extensions.configuration.abstractions.9.0.20.nupkg.sha512"
+    },
+    "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-EsRc4piTdI3Ti5+cZwdpxn+mHwDCqT+b9ecmgYTTttpHFkYDyc4CenRNC9LrU0A+lTYsbQE8EvWC6sNp1Op0YA==",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/9.0.20",
+      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.9.0.20.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Logging.Abstractions/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ZTbbB2mz0MxOMVQF7/yKhRD9ok6QR5Kq+Ifsk7XfdGC3zJTfMeJZeKR8/DfnlyvrlQnaWEmMkrnM8d1sBs3afA==",
+      "path": "microsoft.extensions.logging.abstractions/9.0.20",
+      "hashPath": "microsoft.extensions.logging.abstractions.9.0.20.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Primitives/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-F9PkV2d5cHwibxxgklXhXtvVgZlPCJ0rkuY+jpa34o3vdUr0DcGX7XQkZouWuoDSZoYF0gUydM778d0wNpwB+Q==",
+      "path": "microsoft.extensions.primitives/9.0.20",
+      "hashPath": "microsoft.extensions.primitives.9.0.20.nupkg.sha512"
+    },
+    "AudioStreamer.Audio.Transport/2.0.2": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AudioStreamer.AudioAgent.Contracts/2.0.2": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AudioStreamer.Control.Protocol/2.0.2": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AudioStreamer.Engine/2.0.2": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

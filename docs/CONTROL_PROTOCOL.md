@@ -1,6 +1,6 @@
 # Control Protocol v1
 
-This document defines the current Control Plane datagram format used by the Python Windows node/Device Manager, Android node, and ESP32 controller. It is separate from [Audio Protocol v3](PROTOCOL.md): Control Protocol packets never carry PCM.
+This document defines the current Control Plane datagram formats used by the Windows Service, Android node, and ESP32 controller. It is separate from [Audio Protocol v3](PROTOCOL.md): Control Protocol packets never carry PCM.
 
 ## Common header
 
@@ -46,6 +46,37 @@ Receivers reject unknown magic, versions, message types, invalid enum values, re
 
 The established v1 parsers accept extra trailing bytes after a known message prefix (and ignore bytes following a recognized transaction ID). Do not assign meaning to such bytes within v1 without coordinating all implementations. A future incompatible required layout needs a new version. New message types or capability bits require coordinated implementation; unknown types/bits are rejected by current clients. Audio Protocol versioning is independent.
 
+## Authenticated controller commands (v2)
+
+Discovery and peer status remain unauthenticated Control Protocol v1 messages. Controller-issued `START_STREAM` and `STOP_STREAM` use a separate v2 envelope; v1 node-to-node commands remain supported only when the datagram source address matches the advertised peer endpoint. A controller does not send `HELLO`, `HEARTBEAT`, or `GOODBYE`, and therefore is not inserted into audio-node discovery.
+
+The v2 packet uses the common six-byte header with version `2` and message type `4` (`START_STREAM`) or `5` (`STOP_STREAM`). Its payload is exactly:
+
+| Field | Size | Meaning |
+|---|---:|---|
+| Controller Node ID | 8 | Nonzero stable controller identity |
+| Sender Node ID | 8 | Audio stream sender |
+| Receiver Node ID | 8 | Audio stream receiver; must differ from sender |
+| Transaction ID | 2 | Request correlation ID |
+| Nonce | 16 | Cryptographically random, nonzero per-command value |
+| HMAC-SHA256 | 32 | MAC of the complete 48-byte header and payload prefix |
+
+All integers use network byte order. Total datagram size is 80 bytes. The HMAC is verified in constant time. Receivers reject a missing key, malformed packet, invalid MAC, and a nonce already seen from that controller. Implementations keep a bounded 1,024-entry replay window for ten minutes. `STREAM_STATUS` responses remain v1 and are informational; they do not authorize actions.
+
+The shared secret is 32 random bytes represented as 64 hexadecimal characters. Use the same value on every Windows and Android node and the ESP32 controller. For example, generate one on Windows with:
+
+```powershell
+[Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+On Windows, set `ControlPlane:ControllerSecret` in `%ProgramData%\AudioStreamer\runtime-settings.json` and restart the AudioStreamer service. On Android, enter the value in **Node configuration → Controller shared secret** and save; Android encrypts the value with an Android Keystore key. For ESP32, define `AUDIOSTREAMER_CONTROLLER_SECRET_HEX` in the private `include/audiostreamer/config/WifiSettings.h` before building and flashing. The private header is ignored by Git. Never commit or log the key. An empty/missing key disables controller commands while preserving v1 peer-to-peer operation.
+
+Older receivers reject v2 commands, while v1 discovery and node-to-node streaming remain wire-compatible. Controller support therefore requires updating all participating receivers before enabling commands. The controller remains absent from the peer list.
+
 ## Transport and security
 
-The Control Plane uses IPv4 UDP broadcast for discovery and heartbeats and unicast for node commands/status. The Windows broker is the sole local owner of its configured Control Plane UDP socket and relays datagrams to same-host applications through a named pipe. Android and ESP32 own their respective Control Plane sockets. UDP is best effort; v1 has no acknowledgements, authentication, encryption, or retransmission. Use only on a trusted LAN.
+The Control Plane uses IPv4 UDP broadcast for discovery and heartbeats and unicast for node commands/status. On Windows, the Service hosts the Engine and its `WindowsControlTransport` adapter is the sole local owner of the configured Control Plane UDP socket. IPC carries node commands, snapshots, and events; it does not relay raw Control datagrams. Android and ESP32 own their respective Control Plane sockets. UDP is best effort; neither version encrypts traffic or adds retransmission. V1 is unauthenticated and intended for a trusted LAN; v2 authenticates controller stream commands with the shared key.
+
+## .NET implementation status
+
+`src/AudioStreamer.Control.Protocol/ControlProtocolV1Codec.cs` and `AuthenticatedControllerCommandCodec.cs` are the authoritative .NET serializers/parsers for their respective versions. The Engine `ControlCoordinator` owns discovery, heartbeat/expiry policy, endpoint command routing, authenticated controller command verification, transaction status, replay rejection, and recovery decisions. `src/AudioStreamer.Platform.Windows/WindowsControlTransport.cs` owns the Windows UDP socket, send/receive loops, and network-change notifications; it transfers opaque datagram bytes through `IControlTransport` and does not interpret protocol messages. The Engine `PeerManager` owns authoritative peer records and discovered endpoints. C# tests compare protocol behavior and message layouts; LAN interoperability and long-duration recovery still require hardware validation.

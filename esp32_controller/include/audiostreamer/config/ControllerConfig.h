@@ -2,6 +2,14 @@
 
 #include <cstdint>
 
+#if __has_include("audiostreamer/config/WifiSettings.h")
+#include "audiostreamer/config/WifiSettings.h"
+#endif
+
+#ifndef AUDIOSTREAMER_CONTROLLER_SECRET_HEX
+#define AUDIOSTREAMER_CONTROLLER_SECRET_HEX ""
+#endif
+
 namespace audiostreamer::config {
 
 struct ControllerConfig final {
@@ -12,6 +20,7 @@ struct ControllerConfig final {
     std::uint16_t joystickDeadZone = 450;
     std::uint16_t joystickDebounceMs = 35;
     std::uint16_t wifiReconnectIntervalMs = 5000;
+    const char* controllerSecretHex = AUDIOSTREAMER_CONTROLLER_SECRET_HEX;
 
     static constexpr std::uint8_t kDisplaySdaPin = 21;
     static constexpr std::uint8_t kDisplaySclPin = 22;

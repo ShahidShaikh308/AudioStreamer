@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AudioStreamer.Control.Protocol</AssemblyName>
+    <RootNamespace>AudioStreamer.Control.Protocol</RootNamespace>
+  </PropertyGroup>
+</Project>

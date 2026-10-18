@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "dgSpecHash": "0oI9hUMv8XQ=",
+  "success": true,
+  "projectFilePath": "C:\\Development\\Python\\AudioStreamer\\tests\\AudioStreamer.UI.Tests\\AudioStreamer.UI.Tests.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\shaik\\.nuget\\packages\\communitytoolkit.mvvm\\8.4.2\\communitytoolkit.mvvm.8.4.2.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.codecoverage\\18.10.1\\microsoft.codecoverage.18.10.1.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\9.0.20\\microsoft.extensions.dependencyinjection.abstractions.9.0.20.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\9.0.20\\microsoft.extensions.logging.abstractions.9.0.20.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.net.test.sdk\\18.10.1\\microsoft.net.test.sdk.18.10.1.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.netcore.platforms\\5.0.0\\microsoft.netcore.platforms.5.0.0.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.testplatform.objectmodel\\18.10.1\\microsoft.testplatform.objectmodel.18.10.1.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.testplatform.testhost\\18.10.1\\microsoft.testplatform.testhost.18.10.1.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\system.io.pipes.accesscontrol\\5.0.0\\system.io.pipes.accesscontrol.5.0.0.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\system.security.accesscontrol\\5.0.0\\system.security.accesscontrol.5.0.0.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\system.security.principal.windows\\5.0.0\\system.security.principal.windows.5.0.0.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit\\2.9.3\\xunit.2.9.3.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit.abstractions\\2.0.3\\xunit.abstractions.2.0.3.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit.analyzers\\1.18.0\\xunit.analyzers.1.18.0.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit.assert\\2.9.3\\xunit.assert.2.9.3.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit.core\\2.9.3\\xunit.core.2.9.3.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit.extensibility.core\\2.9.3\\xunit.extensibility.core.2.9.3.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit.extensibility.execution\\2.9.3\\xunit.extensibility.execution.2.9.3.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\xunit.runner.visualstudio\\2.8.2\\xunit.runner.visualstudio.2.8.2.nupkg.sha512"
+  ],
+  "logs": []
+}

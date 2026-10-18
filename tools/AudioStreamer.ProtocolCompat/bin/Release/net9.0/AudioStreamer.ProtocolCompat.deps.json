@@ -1,0 +1,106 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "AudioStreamer.ProtocolCompat/2.0.7": {
+        "dependencies": {
+          "AudioStreamer.Audio.Transport": "2.0.7"
+        },
+        "runtime": {
+          "AudioStreamer.ProtocolCompat.dll": {}
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.20": {
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "Microsoft.Extensions.Logging.Abstractions/9.0.20": {
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "lib/net9.0/Microsoft.Extensions.Logging.Abstractions.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.2026.41315"
+          }
+        }
+      },
+      "AudioStreamer.Audio.Transport/2.0.7": {
+        "dependencies": {
+          "AudioStreamer.Engine": "2.0.7"
+        },
+        "runtime": {
+          "AudioStreamer.Audio.Transport.dll": {
+            "assemblyVersion": "2.0.7.0",
+            "fileVersion": "2.0.7.0"
+          }
+        }
+      },
+      "AudioStreamer.Control.Protocol/2.0.7": {
+        "runtime": {
+          "AudioStreamer.Control.Protocol.dll": {
+            "assemblyVersion": "2.0.7.0",
+            "fileVersion": "2.0.7.0"
+          }
+        }
+      },
+      "AudioStreamer.Engine/2.0.7": {
+        "dependencies": {
+          "AudioStreamer.Control.Protocol": "2.0.7",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.20",
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.20"
+        },
+        "runtime": {
+          "AudioStreamer.Engine.dll": {
+            "assemblyVersion": "2.0.7.0",
+            "fileVersion": "2.0.7.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "AudioStreamer.ProtocolCompat/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.Extensions.DependencyInjection.Abstractions/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-EsRc4piTdI3Ti5+cZwdpxn+mHwDCqT+b9ecmgYTTttpHFkYDyc4CenRNC9LrU0A+lTYsbQE8EvWC6sNp1Op0YA==",
+      "path": "microsoft.extensions.dependencyinjection.abstractions/9.0.20",
+      "hashPath": "microsoft.extensions.dependencyinjection.abstractions.9.0.20.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Logging.Abstractions/9.0.20": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ZTbbB2mz0MxOMVQF7/yKhRD9ok6QR5Kq+Ifsk7XfdGC3zJTfMeJZeKR8/DfnlyvrlQnaWEmMkrnM8d1sBs3afA==",
+      "path": "microsoft.extensions.logging.abstractions/9.0.20",
+      "hashPath": "microsoft.extensions.logging.abstractions.9.0.20.nupkg.sha512"
+    },
+    "AudioStreamer.Audio.Transport/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AudioStreamer.Control.Protocol/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "AudioStreamer.Engine/2.0.7": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

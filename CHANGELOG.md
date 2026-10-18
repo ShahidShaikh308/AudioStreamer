@@ -2,6 +2,14 @@
 
 This changelog records user-visible project milestones and architecture changes. It is not a claim that every milestone has a signed or published binary release.
 
+## Unreleased
+
+- Expanded the ESP32 Active routes screen to list multiple concurrent routes, allow selecting a route to stop, and remove routes after stop/failure or when their peers disappear or expire.
+- Removed the Windows UI's global “Search or run commands” box and its Ctrl+K shortcut; page content now uses the available window width.
+- Advertise the Windows node with the computer's device name by default. Existing installations using the old default “AudioStreamer Node” are migrated; user-defined names are retained.
+- Made the Windows named-pipe IPC name configurable for isolated integration tests while preserving the production pipe name.
+- Ignore .NET build output, test results, and publish artifacts so fresh build products stay out of source control.
+
 ## AudioStreamer v1 Phase 7 — ESP32 Control Plane integration
 
 - Added the ESP32 Control Plane client with persistent identity, discovery, heartbeat/peer maintenance, and existing v1 stream command support.

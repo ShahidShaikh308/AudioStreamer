@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "rEJdwjEweIQ=",
+  "success": true,
+  "projectFilePath": "C:\\Development\\Python\\AudioStreamer\\src\\AudioStreamer.Engine\\AudioStreamer.Engine.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\9.0.20\\microsoft.extensions.dependencyinjection.abstractions.9.0.20.nupkg.sha512",
+    "C:\\Users\\shaik\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\9.0.20\\microsoft.extensions.logging.abstractions.9.0.20.nupkg.sha512"
+  ],
+  "logs": []
+}

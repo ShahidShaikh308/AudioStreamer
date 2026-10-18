@@ -17,7 +17,7 @@ public:
     virtual bool initialize() = 0;
     virtual void handleInput(input::InputEvent event) = 0;
     virtual void render(display::IDisplay& display) = 0;
-    virtual void updateStatus(bool wifiConnected, std::uint8_t peerCount) = 0;
+    virtual void updateStatus(bool wifiConnected, bool controlReady, std::uint8_t peerCount) = 0;
 };
 
 }  // namespace audiostreamer::ui

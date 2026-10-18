@@ -1,0 +1,68 @@
+<Project Sdk="WixToolset.Sdk/5.0.2">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <DefineConstants>ProductVersion=$(Version)</DefineConstants>
+    <PayloadRoot Condition="'$(PayloadRoot)' == ''">$(MSBuildThisFileDirectory)payload</PayloadRoot>
+    <ServiceProject>$(MSBuildThisFileDirectory)..\src\AudioStreamer.Service\AudioStreamer.Service.csproj</ServiceProject>
+    <AudioAgentProject>$(MSBuildThisFileDirectory)..\src\AudioStreamer.AudioAgent\AudioStreamer.AudioAgent.csproj</AudioAgentProject>
+    <UiProject>$(MSBuildThisFileDirectory)..\src\AudioStreamer.UI\AudioStreamer.UI.csproj</UiProject>
+    <ServicePayloadDirectory>$(PayloadRoot)\Service\</ServicePayloadDirectory>
+    <UiPayloadDirectory>$(PayloadRoot)\UI\</UiPayloadDirectory>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- WiX warns that the built-in ServiceConfig API is unreliable; it is needed for the existing ServiceSid setting. -->
+    <SuppressSpecificWarnings>$(SuppressSpecificWarnings);1149</SuppressSpecificWarnings>
+    <!-- WinUI self-contained payloads include multi-language native resources; these exceed MSI File.Language checks. -->
+    <!-- ProgramMenuFolder resolves to the common Programs folder for this per-machine package. -->
+    <SuppressIces>$(SuppressIces);ICE03;ICE38;ICE43;ICE57;ICE90</SuppressIces>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Util.wixext" />
+    <PackageReference Include="WixToolset.Firewall.wixext" />
+    <BindPath Include="$(PayloadRoot)" BindName="PayloadRoot" />
+  </ItemGroup>
+
+  <!-- Publish before WiX compiles so its <Files> harvest sees a complete, fresh payload. -->
+  <Target Name="GenerateInstallerPayload" BeforeTargets="CoreCompile">
+    <RemoveDir Directories="$(ServicePayloadDirectory);$(UiPayloadDirectory)" />
+    <MakeDir Directories="$(ServicePayloadDirectory);$(UiPayloadDirectory)" />
+
+    <MSBuild Projects="$(ServiceProject)" Targets="Restore;Publish" BuildInParallel="false"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;SelfContained=true;UseAppHost=true;PublishSingleFile=false;PublishDir=$(ServicePayloadDirectory)" />
+    <MSBuild Projects="$(AudioAgentProject)" Targets="Restore;Publish" BuildInParallel="false"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;SelfContained=true;UseAppHost=true;PublishSingleFile=false;PublishDir=$(ServicePayloadDirectory)" />
+    <MSBuild Projects="$(UiProject)" Targets="Restore;Publish" BuildInParallel="false"
+             Properties="Configuration=$(Configuration);Platform=x64;RuntimeIdentifier=win-x64;SelfContained=true;UseAppHost=true;PublishSingleFile=false;WindowsAppSDKSelfContained=true;PublishDir=$(UiPayloadDirectory)" />
+
+    <!-- The WinUI publish target omits generated app PRI/XBF files that exist in the build output. -->
+    <MSBuild Projects="$(UiProject)" Targets="GetTargetPath" BuildInParallel="false"
+             Properties="Configuration=$(Configuration);Platform=x64;RuntimeIdentifier=win-x64">
+      <Output TaskParameter="TargetOutputs" ItemName="_UiTargetAssembly" />
+    </MSBuild>
+    <PropertyGroup>
+      <_UiBuildOutputDirectory>@(_UiTargetAssembly->'%(RootDir)%(Directory)')</_UiBuildOutputDirectory>
+    </PropertyGroup>
+    <ItemGroup>
+      <_UiXamlBinary Include="$(_UiBuildOutputDirectory)**\*.xbf" />
+      <_UiResourceIndex Include="$(_UiBuildOutputDirectory)**\*.pri" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_UiXamlBinary);@(_UiResourceIndex)"
+          DestinationFiles="@(_UiXamlBinary->'$(UiPayloadDirectory)%(RecursiveDir)%(Filename)%(Extension)');@(_UiResourceIndex->'$(UiPayloadDirectory)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+    <Error Condition="!Exists('$(ServicePayloadDirectory)AudioStreamer.Service.exe')"
+           Text="Required service executable was not published to $(ServicePayloadDirectory)." />
+    <Error Condition="!Exists('$(ServicePayloadDirectory)AudioStreamer.AudioAgent.exe')"
+           Text="Required AudioAgent executable was not published to $(ServicePayloadDirectory)." />
+    <Error Condition="!Exists('$(UiPayloadDirectory)AudioStreamer.UI.exe')"
+           Text="Required UI executable was not published to $(UiPayloadDirectory)." />
+    <Error Condition="'@(_UiXamlBinary)' == ''"
+           Text="The WinUI build produced no compiled XAML files for the UI payload." />
+    <Error Condition="'@(_UiResourceIndex)' == ''"
+           Text="The WinUI build produced no resource index files for the UI payload." />
+  </Target>
+
+  <Target Name="CleanInstallerPayload" BeforeTargets="Clean">
+    <RemoveDir Directories="$(ServicePayloadDirectory);$(UiPayloadDirectory)" />
+  </Target>
+</Project>
